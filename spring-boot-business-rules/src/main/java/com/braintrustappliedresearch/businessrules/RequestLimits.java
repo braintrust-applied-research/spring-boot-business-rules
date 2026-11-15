@@ -24,6 +24,15 @@ final class RequestLimits {
     }
 
     /**
+     * Returns the largest request body that will be read.
+     *
+     * @return the cap in bytes
+     */
+    int maxBodyBytes() {
+        return limits.maxBodyBytes();
+    }
+
+    /**
      * Returns what is wrong with the request, or {@code null} if it is within the limits.
      *
      * @param decisionName the value of the {@code evaluate} key

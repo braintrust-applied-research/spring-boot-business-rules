@@ -1,10 +1,16 @@
 package com.braintrustappliedresearch.businessrules;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.kie.dmn.api.core.DMNModel;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.StreamReadFeature;
@@ -14,7 +20,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -112,6 +117,7 @@ public class RulesController {
      *       requested without a {@code model} while several models are loaded, or the body contains a key that is not
      *       a declared input of the model. The last rule matters for security: values supplied under a decision's name
      *       would otherwise replace that decision's result and bypass the rule</li>
+     *   <li>{@code 413}: the body is larger than {@code limits.max-body-bytes}</li>
      *   <li>{@code 404}: no loaded model has a decision with that name, or the named {@code model} does not exist
      *       (the body lists the available models only if instructions are enabled)</li>
      *   <li>{@code 422}: nothing was decided. DMN reported an error or a warning (a required input was not supplied,
@@ -120,27 +126,62 @@ public class RulesController {
      *       instructions are off)</li>
      * </ul>
      *
-     * <p>The body must be one JSON object with <strong>no duplicate keys</strong>, at any depth. A body that is empty,
-     * not valid JSON, not an object, or has a duplicate key gets a {@code 400} in the same {@code {"error": ...}}
-     * shape as every other error here; the message never repeats the body.
+     * <p>The body must be one UTF-8 encoded JSON object with <strong>no duplicate keys</strong>, at any depth. A body
+     * that is empty, not UTF-8, not valid JSON, not an object, or has a duplicate key gets a {@code 400} in the same
+     * {@code {"error": ...}} shape as every other error here; the message never repeats the body. A body larger than
+     * {@code limits.max-body-bytes} gets {@code 413}; it is read with that cap, so it is never held in memory whole.
      *
-     * @param body the raw JSON body: rule inputs plus the {@code evaluate} key
+     * @param request the request whose body is the JSON: rule inputs plus the {@code evaluate} key
      * @return the response body and status described above
+     * @throws IOException if the request body cannot be read
      */
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<Map<String, Object>> post(@RequestBody(required = false) byte[] body) {
+    public ResponseEntity<Map<String, Object>> post(HttpServletRequest request) throws IOException {
+        int max = limits.maxBodyBytes();
+        // Read at most max + 1 bytes, so an oversized body is refused without ever being held in memory
+        if (request.getContentLengthLong() > max) {
+            return tooLarge();
+        }
+        byte[] body = request.getInputStream().readNBytes(max + 1);
+        if (body.length > max) {
+            return tooLarge();
+        }
+        return evaluateJson(body);
+    }
+
+    /**
+     * Reads and evaluates a request body that has already been read: the same rules as {@link #post}, minus the size
+     * cap, which can only be applied while the body is being read.
+     *
+     * @param body the raw bytes of the JSON body; must be UTF-8
+     * @return the response body and status described for {@link #post}
+     */
+    public ResponseEntity<Map<String, Object>> evaluateJson(byte[] body) {
         if (body == null || body.length == 0) {
             return error(HttpStatus.BAD_REQUEST, "The request body is empty", null);
         }
+        // Strict UTF-8 (RFC 8259). Jackson would otherwise sniff UTF-16 and UTF-32 from the first bytes, and a gateway
+        // or WAF that reads the body as UTF-8 would then see something different from what is evaluated here.
+        String json;
+        try {
+            json = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(body)).toString();
+        } catch (CharacterCodingException e) {
+            return error(HttpStatus.BAD_REQUEST, "The request body must be UTF-8 encoded JSON", null);
+        }
         Map<String, Object> request;
         try {
-            request = STRICT_JSON.readValue(body, REQUEST_TYPE);
+            request = STRICT_JSON.readValue(json, REQUEST_TYPE);
         } catch (JacksonException e) {
             boolean duplicate = e.getOriginalMessage() != null && e.getOriginalMessage().startsWith("Duplicate");
             return error(HttpStatus.BAD_REQUEST, duplicate ? "Duplicate keys are not allowed in the request body"
                     : "The request body is not a valid JSON object", null);
         }
         return evaluate(request);
+    }
+
+    private ResponseEntity<Map<String, Object>> tooLarge() {
+        return error(HttpStatus.CONTENT_TOO_LARGE, "The request body is larger than " + limits.maxBodyBytes() + " bytes", null);
     }
 
     /**

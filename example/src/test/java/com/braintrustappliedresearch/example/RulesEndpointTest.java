@@ -158,7 +158,7 @@ class RulesEndpointTest {
         assertThat(tooMany.statusCode()).isEqualTo(400);
         assertThat(tooMany.body()).contains("Too many inputs").hasSizeLessThan(300);
 
-        String longModel = "M".repeat(1024 * 1024);
+        String longModel = "M".repeat(512 * 1024);   // under the body cap, far over the name limit
         HttpResponse<String> model = post("{\"evaluate\":\"all\",\"model\":\"" + longModel + "\"}");
         assertThat(model.statusCode()).isEqualTo(400);
         assertThat(model.body()).hasSizeLessThan(300).doesNotContain("MMMMMMMMMM");
@@ -167,6 +167,28 @@ class RulesEndpointTest {
         HttpResponse<String> value = post("{\"firstName\":\"" + longValue + "\",\"lastName\":\"x\",\"evaluate\":\"Greeting\"}");
         assertThat(value.statusCode()).isEqualTo(400);
         assertThat(value.body()).contains("'firstName'").hasSizeLessThan(300);
+    }
+
+    @Test
+    void aBodyOverTheSizeCapIsRefusedWith413() throws Exception {
+        // 2 MiB is over the default 1 MiB cap, whatever it contains
+        HttpResponse<String> response = post("{\"evaluate\":\"Eligibility\",\"age\":\"" + "9".repeat(2 * 1024 * 1024) + "\"}");
+
+        assertThat(response.statusCode()).isEqualTo(413);
+        assertThat(response.body()).contains("larger than 1048576 bytes").hasSizeLessThan(300);
+    }
+
+    @Test
+    void aUtf16BodyIsRefused() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/business/rules"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofByteArray(
+                        "{\"age\":30,\"income\":50000,\"evaluate\":\"Eligibility\"}".getBytes(java.nio.charset.StandardCharsets.UTF_16LE)))
+                .build();
+
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(400);
     }
 
     @Test

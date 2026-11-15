@@ -80,6 +80,7 @@ Put `.dmn` files under `src/main/resources/rules/`. Configuration:
 | `spring-boot-business-rules.limits.max-inputs` | `500` | Most inputs one request may carry. A request over a limit gets `400` |
 | `spring-boot-business-rules.limits.max-name-length` | `256` | Longest `evaluate` or `model` value, input name, or name inside an input value (characters) |
 | `spring-boot-business-rules.limits.max-value-length` | `10000` | Longest single text value anywhere in the inputs, including inside lists and objects (characters) |
+| `spring-boot-business-rules.limits.max-body-bytes` | `1048576` | Largest request body (bytes). A larger one gets `413` and is read only up to this size, never held whole. Keep a body-size limit in front of the application as well |
 
 With `server.servlet.context-path=/api` and `spring-boot-business-rules.path=/business/rules`, the endpoint is `/api/business/rules`.
 
@@ -160,13 +161,14 @@ BOM instead of inheriting the parent, these properties have no effect and you mu
 - `POST <path>` takes a JSON body: every key except `evaluate` (and optional `model`) must be a declared DMN input of
   the model; `evaluate` names the decision to run. Dependent decisions are evaluated too. Any other key, including the
   name of a decision, is rejected with `400`: a value supplied under a decision's name would otherwise replace that
-  decision's result and let a caller bypass the rule. The body must be one JSON object with **no duplicate keys**, at any
-  depth: with the usual "last one wins" a gateway that checked the first `"age"` and this endpoint that used the last
-  would disagree about the request, so a duplicate (like an empty or malformed body) gets `400`.
+  decision's result and let a caller bypass the rule. The body must be one **UTF-8** JSON object with **no duplicate keys**, at
+  any depth: with the usual "last one wins" a gateway that checked the first `"age"` and this endpoint that used the last
+  would disagree about the request, and the same goes for a body in UTF-16 or UTF-32, which parsers can sniff but a
+  gateway reading UTF-8 cannot see into. So a duplicate or a non-UTF-8 body (like an empty or malformed one) gets `400`.
   Use `"evaluate":"all"` to run every decision in a model in one call (see below).
-  Responses: `200` result, `400` an empty, malformed or duplicate-key body, missing `evaluate`, an unknown input, an
-  ambiguous `all`, or a request over a limit (`model` must be a string), `404` unknown decision,
-  `422` nothing was decided (see below).
+  Responses: `200` result, `400` an empty, non-UTF-8, malformed or duplicate-key body, missing `evaluate`, an unknown
+  input, an ambiguous `all`, or a request over a limit (`model` must be a string), `404` unknown decision, `413` a
+  body over `limits.max-body-bytes`, `422` nothing was decided (see below).
 
 **A `null` result is never a success.** A request that is well formed but cannot be decided gets `422`, not `200`: a
 required input is missing, an input has the wrong type or is `null` (DMN only warns "no rule matched ... setting result to

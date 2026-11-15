@@ -21,7 +21,7 @@ class RulesControllerJsonTest {
             new RulesEngine(List.of(new ClassPathResource("test-models/model-table.dmn"))), true);
 
     private ResponseEntity<Map<String, Object>> post(String json) {
-        return controller.post(json.getBytes(StandardCharsets.UTF_8));
+        return controller.evaluateJson(json.getBytes(StandardCharsets.UTF_8));
     }
 
     private static String error(ResponseEntity<Map<String, Object>> response) {
@@ -72,8 +72,8 @@ class RulesControllerJsonTest {
             assertThat(response.getBody()).as(body).containsOnlyKeys("error");
             assertThat(error(response)).as(body).isEqualTo("The request body is not a valid JSON object");
         }
-        assertThat(error(controller.post(new byte[0]))).isEqualTo("The request body is empty");
-        assertThat(error(controller.post(null))).isEqualTo("The request body is empty");
+        assertThat(error(controller.evaluateJson(new byte[0]))).isEqualTo("The request body is empty");
+        assertThat(error(controller.evaluateJson(null))).isEqualTo("The request body is empty");
     }
 
     @Test
