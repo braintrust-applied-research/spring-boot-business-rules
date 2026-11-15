@@ -431,7 +431,8 @@ that the `.editorconfig` expresses (4-space Java, 2-space XML/YAML, LF endings) 
 | Stage | Runs on | What it does |
 | --- | --- | --- |
 | `test` | every push and pull request | `mvn verify` (all tests) on Java 21 and 25 |
-| `docs` | push to `main`, after `test` | lints `docs/openapi.yaml`, generates the Javadoc, builds the README + Swagger UI + Javadoc site, deploys to GitHub Pages |
+| `docs-build` | push to `main`, after `test` | lints `docs/openapi.yaml`, generates the Javadoc, builds the README + Swagger UI + Javadoc site. Runs the npm and Maven tooling with a read-only token and no OIDC identity |
+| `docs` | after `docs-build` | deploys the site that `docs-build` produced to GitHub Pages. It holds the Pages permissions and runs no build tooling, so a compromised build dependency cannot deploy by itself |
 | `snyk` | `v*` tags, alongside `test`; or a manual run (Actions → CI → Run workflow), which never publishes | **release gate:** Snyk dependency scan (every module) and Snyk Code scan. Blocks on a dependency finding of medium severity or higher **that has a published fix** (findings with no fix yet are listed but do not block) and on any medium-or-higher Snyk Code finding |
 | `publish` | `v*` tags, after `test` **and** `snyk`, and your approval of the `maven-central` environment | sets the version from the tag, signs, uploads and validates the bundle on Maven Central. It does **not** release it: you click Publish in the Central Portal |
 
@@ -474,9 +475,9 @@ Also required:
 - **GitHub Pages**: Settings → Pages → Build and deployment → Source: *GitHub Actions*. **Do this before the first
   merge to `main`.** If the source is left on "Deploy from a branch", GitHub runs its own built-in "pages build and
   deployment" job, which builds `/docs` with Jekyll (and fails if the folder does not exist) instead of publishing the
-  site built by the `docs` stage. This is a repository setting, not something the workflow can change. The site is
+  site built by the `docs-build` and `docs` stages. This is a repository setting, not something the workflow can change. The site is
   served at `https://www.braintrustappliedresearch.com/spring-boot-business-rules/` (the organization's custom domain;
-  the `braintrust-applied-research.github.io` address redirects to it). The docs stage needs no secrets (it uses the
+  the `braintrust-applied-research.github.io` address redirects to it). The docs stages need no secrets (it uses the
   workflow's OIDC token).
 - **Central namespace**: the `com.braintrustappliedresearch` groupId must be verified on central.sonatype.com
   (Namespaces → add it, then publish the DNS TXT record the Portal gives you on `braintrustappliedresearch.com`).
