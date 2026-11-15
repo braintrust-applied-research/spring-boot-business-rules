@@ -1,0 +1,18 @@
+${AnsiColor.BRIGHT_CYAN}
+ ___  _   _  ___  ___  _  _  ___  ___  ___
+| _ )| | | |/ __||_ _|| \| || __|/ __|/ __|
+| _ \| |_| |\__ \ | | | .` || _| \__ \\__ \
+|___/ \___/ |___/|___||_|\_||___||___/|___/
+
+ ___  _   _  _     ___  ___
+| _ \| | | || |   | __|/ __|
+|   /| |_| || |__ | _| \__ \
+|_|_\ \___/ |____||___||___/
+${AnsiColor.DEFAULT}
+${AnsiColor.BRIGHT_WHITE}:: spring-boot-business-rules ::${AnsiColor.DEFAULT}  ${application.formatted-version}
+:: Spring Boot ${spring-boot.version} ::
+
+Copyright (c) 2026 Braintrust Applied Research, LLC
+Licensed under the Apache License, Version 2.0
+https://braintrustappliedresearch.com
+

@@ -1,0 +1,28 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Markup and config conventionally use 2 spaces (Maven/Spring POMs, GitHub workflows, nested lists)
+[*.{xml,dmn,yml,yaml,html,md}]
+indent_size = 2
+
+# Trailing double-space is a hard line break in Markdown
+[*.md]
+trim_trailing_whitespace = false
+
+[*.bat]
+end_of_line = crlf
+
+[*.{png,jpg,jpeg,gif,ico,pdf,jar,war,zip,gz,woff,woff2}]
+charset = unset
+end_of_line = unset
+indent_style = unset
+indent_size = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/"
+             id="model-all" name="ModelAll" namespace="https://example.test/model-all">
+
+  <inputData id="i_n" name="n"><variable id="v_n" name="n" typeRef="number"/></inputData>
+
+  <decision id="d_model-all1" name="all">
+    <variable id="v_model-all1" name="all" typeRef="number"/>
+    <informationRequirement id="ir_model-all1"><requiredInput href="#i_n"/></informationRequirement>
+    <literalExpression id="le_model-all1"><text>n</text></literalExpression>
+  </decision>
+
+  <decision id="d_model-all2" name="other">
+    <variable id="v_model-all2" name="other" typeRef="number"/>
+    <informationRequirement id="ir_model-all2"><requiredInput href="#i_n"/></informationRequirement>
+    <literalExpression id="le_model-all2"><text>n + 1</text></literalExpression>
+  </decision>
+</definitions>

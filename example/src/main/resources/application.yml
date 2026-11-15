@@ -1,0 +1,9 @@
+server:
+  servlet:
+    context-path: /api
+
+spring-boot-business-rules:
+  # Appended to the server context path: the endpoint is served at /api/business/rules
+  path: /business/rules
+  # Off by default in the library. The example opts in so `GET /api/business/rules` shows usage and the loaded models.
+  instructions-enabled: true

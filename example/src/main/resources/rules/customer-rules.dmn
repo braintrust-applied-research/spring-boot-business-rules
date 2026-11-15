@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20240513/MODEL/" xmlns:dmndi="https://www.omg.org/spec/DMN/20230324/DMNDI/" xmlns:dc="http://www.omg.org/spec/DMN/20180521/DC/" xmlns:di="http://www.omg.org/spec/DMN/20180521/DI/" xmlns:feel="https://www.omg.org/spec/DMN/20240513/FEEL/" xmlns:kie="https://kie.org/dmn/extensions/1.0" id="customer-rules" name="CustomerRules" namespace="https://github.com/braintrust-applied-research/spring-boot-business-rules/example">
+  <decision id="d_greeting" name="Greeting">
+    <variable id="v_greeting" name="Greeting" typeRef="string" />
+    <informationRequirement id="ir_g1">
+      <requiredInput href="#i_firstName" />
+    </informationRequirement>
+    <informationRequirement id="ir_g2">
+      <requiredInput href="#i_lastName" />
+    </informationRequirement>
+    <literalExpression id="le_greeting">
+      <text>&quot;Hello, &quot; + firstName + &quot; &quot; + lastName</text>
+    </literalExpression>
+  </decision>
+  <decision id="d_eligibility" name="Eligibility">
+    <variable id="v_eligibility" name="Eligibility" typeRef="string" />
+    <informationRequirement id="ir_e1">
+      <requiredInput href="#i_age" />
+    </informationRequirement>
+    <informationRequirement id="ir_e2">
+      <requiredInput href="#i_income" />
+    </informationRequirement>
+    <decisionTable id="dt_eligibility" hitPolicy="UNIQUE">
+      <input id="dt_in_age" label="age">
+        <inputExpression id="dt_ie_age" typeRef="number">
+          <text>age</text>
+        </inputExpression>
+      </input>
+      <input id="dt_in_income" label="income">
+        <inputExpression id="dt_ie_income" typeRef="number">
+          <text>income</text>
+        </inputExpression>
+      </input>
+      <output id="dt_out" label="Eligibility" />
+      <rule id="r1">
+        <description>Minors are never eligible</description>
+        <inputEntry id="r1_i1">
+          <text>&lt; 18</text>
+        </inputEntry>
+        <inputEntry id="r1_i2">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="r1_o">
+          <text>&quot;Declined&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="r2">
+        <description>Adults with high income are approved</description>
+        <inputEntry id="r2_i1">
+          <text>&gt;= 18</text>
+        </inputEntry>
+        <inputEntry id="r2_i2">
+          <text>&gt;= 75000</text>
+        </inputEntry>
+        <outputEntry id="r2_o">
+          <text>&quot;Approved&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="r3">
+        <description>Adults with middle income are referred for manual review</description>
+        <inputEntry id="r3_i1">
+          <text>&gt;= 18</text>
+        </inputEntry>
+        <inputEntry id="r3_i2">
+          <text>[30000..75000)</text>
+        </inputEntry>
+        <outputEntry id="r3_o">
+          <text>&quot;Referred&quot;</text>
+        </outputEntry>
+      </rule>
+      <rule id="r4">
+        <description>Adults with low income are declined</description>
+        <inputEntry id="r4_i1">
+          <text>&gt;= 18</text>
+        </inputEntry>
+        <inputEntry id="r4_i2">
+          <text>&lt; 30000</text>
+        </inputEntry>
+        <outputEntry id="r4_o">
+          <text>&quot;Declined&quot;</text>
+        </outputEntry>
+      </rule>
+    </decisionTable>
+  </decision>
+  <decision id="d_offer" name="Offer">
+    <variable id="v_offer" name="Offer" typeRef="string" />
+    <informationRequirement id="ir_o1">
+      <requiredDecision href="#d_eligibility" />
+    </informationRequirement>
+    <informationRequirement id="ir_o2">
+      <requiredDecision href="#d_greeting" />
+    </informationRequirement>
+    <informationRequirement id="ir_o3">
+      <requiredInput href="#i_zipCode" />
+    </informationRequirement>
+    <literalExpression id="le_offer">
+      <text>if Eligibility = &quot;Approved&quot; then Greeting + &quot;: you are pre-approved (region &quot; + string(substring(zipCode, 1, 3)) + &quot;)&quot;
+else if Eligibility = &quot;Referred&quot; then Greeting + &quot;: your application needs a manual review&quot;
+else Greeting + &quot;: we cannot make an offer at this time&quot;</text>
+    </literalExpression>
+  </decision>
+  <inputData id="i_firstName" name="firstName">
+    <variable id="v_firstName" name="firstName" typeRef="string" />
+  </inputData>
+  <inputData id="i_lastName" name="lastName">
+    <variable id="v_lastName" name="lastName" typeRef="string" />
+  </inputData>
+  <inputData id="i_age" name="age">
+    <variable id="v_age" name="age" typeRef="number" />
+  </inputData>
+  <inputData id="i_income" name="income">
+    <variable id="v_income" name="income" typeRef="number" />
+  </inputData>
+  <inputData id="i_zipCode" name="zipCode">
+    <variable id="v_zipCode" name="zipCode" typeRef="string" />
+  </inputData>
+  <dmndi:DMNDI>
+    <dmndi:DMNDiagram id="dmndi_customer_rules" name="DRG" useAlternativeInputDataShape="false">
+      <di:extension>
+        <kie:ComponentsWidthsExtension>
+          <kie:ComponentWidths dmnElementRef="le_offer">
+            <kie:width>708</kie:width>
+          </kie:ComponentWidths>
+        </kie:ComponentsWidthsExtension>
+      </di:extension>
+      <dmndi:DMNShape id="dmnshape_i_firstName" dmnElementRef="i_firstName" isCollapsed="false">
+        <dc:Bounds x="40" y="380" width="100" height="50" />
+      </dmndi:DMNShape>
+      <dmndi:DMNShape id="dmnshape_i_lastName" dmnElementRef="i_lastName" isCollapsed="false">
+        <dc:Bounds x="180" y="380" width="100" height="50" />
+      </dmndi:DMNShape>
+      <dmndi:DMNShape id="dmnshape_i_age" dmnElementRef="i_age" isCollapsed="false">
+        <dc:Bounds x="400" y="380" width="100" height="50" />
+      </dmndi:DMNShape>
+      <dmndi:DMNShape id="dmnshape_i_income" dmnElementRef="i_income" isCollapsed="false">
+        <dc:Bounds x="540" y="380" width="100" height="50" />
+      </dmndi:DMNShape>
+      <dmndi:DMNShape id="dmnshape_i_zipCode" dmnElementRef="i_zipCode" isCollapsed="false">
+        <dc:Bounds x="740" y="380" width="100" height="50" />
+      </dmndi:DMNShape>
+      <dmndi:DMNShape id="dmnshape_d_greeting" dmnElementRef="d_greeting" isCollapsed="false">
+        <dc:Bounds x="70" y="220" width="160" height="80" />
+      </dmndi:DMNShape>
+      <dmndi:DMNShape id="dmnshape_d_eligibility" dmnElementRef="d_eligibility" isCollapsed="false">
+        <dc:Bounds x="440" y="220" width="160" height="80" />
+      </dmndi:DMNShape>
+      <dmndi:DMNShape id="dmnshape_d_offer" dmnElementRef="d_offer" isCollapsed="false">
+        <dc:Bounds x="270" y="60" width="160" height="80" />
+      </dmndi:DMNShape>
+      <dmndi:DMNEdge id="dmnedge_ir_g1" dmnElementRef="ir_g1">
+        <di:waypoint x="90" y="380" />
+        <di:waypoint x="150" y="300" />
+      </dmndi:DMNEdge>
+      <dmndi:DMNEdge id="dmnedge_ir_g2" dmnElementRef="ir_g2">
+        <di:waypoint x="230" y="380" />
+        <di:waypoint x="150" y="300" />
+      </dmndi:DMNEdge>
+      <dmndi:DMNEdge id="dmnedge_ir_e1" dmnElementRef="ir_e1">
+        <di:waypoint x="450" y="380" />
+        <di:waypoint x="520" y="300" />
+      </dmndi:DMNEdge>
+      <dmndi:DMNEdge id="dmnedge_ir_e2" dmnElementRef="ir_e2">
+        <di:waypoint x="590" y="380" />
+        <di:waypoint x="520" y="300" />
+      </dmndi:DMNEdge>
+      <dmndi:DMNEdge id="dmnedge_ir_o1" dmnElementRef="ir_o1">
+        <di:waypoint x="520" y="220" />
+        <di:waypoint x="350" y="140" />
+      </dmndi:DMNEdge>
+      <dmndi:DMNEdge id="dmnedge_ir_o2" dmnElementRef="ir_o2">
+        <di:waypoint x="150" y="220" />
+        <di:waypoint x="350" y="140" />
+      </dmndi:DMNEdge>
+      <dmndi:DMNEdge id="dmnedge_ir_o3" dmnElementRef="ir_o3">
+        <di:waypoint x="790" y="380" />
+        <di:waypoint x="350" y="140" />
+      </dmndi:DMNEdge>
+    </dmndi:DMNDiagram>
+  </dmndi:DMNDI>
+</definitions>

@@ -1,0 +1,203 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+# Least privilege by default; jobs that need more declare it themselves.
+permissions:
+  contents: read
+
+# Runner image is pinned (ubuntu-24.04) instead of `ubuntu-latest`: GitHub is migrating the `latest` label to Ubuntu 26,
+# which would change the toolchain under us without a commit. Move to a newer image deliberately, after testing.
+jobs:
+  # ---------------------------------------------------------------- test
+  test:
+    name: Test (Java ${{ matrix.java }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        java: [21, 25]   # previous LTS (bytecode baseline) and current LTS
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: maven
+      - name: Build and run all tests
+        run: mvn --batch-mode --no-transfer-progress verify
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: surefire-reports-java${{ matrix.java }}
+          path: '**/target/surefire-reports/'
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------- docs
+  # Publishes README + Swagger UI (OpenAPI v3) + Javadoc to GitHub Pages. Needs no secrets.
+  docs:
+    name: Publish docs
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pages: write       # deploy to GitHub Pages
+      id-token: write    # OIDC token that actions/deploy-pages verifies
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v6   # Javadoc is generated with Maven
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - name: Lint spec, generate Javadoc and build site
+        run: ./docs/build-site.sh
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v5
+
+  # --------------------------------------------------------------- snyk
+  # Release gate. Runs only for version tags, in parallel with `test`, and `publish` needs it. It blocks the
+  # release when:
+  #   - a dependency has a finding of MEDIUM severity or higher (medium, high, critical) that HAS A FIX, meaning
+  #     a fixed version has been published (Snyk's `fixedIn`). Findings with no published fix are listed but do
+  #     not block, and low-severity findings never block; or
+  #   - Snyk Code reports a finding of medium severity or higher in the source (a fix is always possible there).
+  # Why not `snyk test --fail-on=all`? It only counts issues Snyk can remediate by upgrading a direct dependency, so
+  # it let critical transitive issues with published fixes pass (verified), which are exactly the ones fixed here
+  # with a version override. To accept a finding deliberately, fix it or record a documented ignore in a `.snyk`
+  # policy file (see CONTRIBUTORS.md).
+  # Needs the SNYK_TOKEN repository secret. A missing token FAILS the job, so the gate cannot be skipped silently.
+  snyk:
+    name: Snyk security gate
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      SNYK_VERSION: 1.1308.4   # pinned, like the other tool versions in this repo; bump deliberately
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6   # Snyk resolves the Maven dependency tree with mvn
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - uses: actions/setup-node@v7   # the Snyk CLI is run from npm
+        with:
+          node-version: 22
+      - name: Require SNYK_TOKEN
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          if [ -z "$SNYK_TOKEN" ]; then
+            echo "::error::The SNYK_TOKEN secret is not set. The Snyk release gate cannot run, so nothing will be published."
+            exit 1
+          fi
+      - name: Snyk Open Source scan (dependencies of every module)
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          # Exit codes: 0 = clean, 1 = vulnerabilities found (judged in the next step), anything else = Snyk
+          # itself failed, which must fail the job (fail closed) and not be mistaken for a clean scan.
+          status=0
+          npx --yes "snyk@${SNYK_VERSION}" test --all-projects --severity-threshold=medium --json > snyk-oss.json || status=$?
+          if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
+            echo "::error::Snyk exited with status $status; the scan did not complete, so nothing will be published."
+            head -c 2000 snyk-oss.json
+            exit 1
+          fi
+      - name: Block on dependency findings that have a fix
+        run: |
+          # Any project Snyk could not scan is a failure, not a pass.
+          if jq -e '(if type == "array" then . else [.] end) | any(.[]; has("error"))' snyk-oss.json > /dev/null; then
+            echo "::error::Snyk could not scan one or more projects:"
+            jq -r '(if type == "array" then . else [.] end)[] | select(has("error")) | "  " + .error' snyk-oss.json
+            exit 1
+          fi
+          # Unique medium-or-higher findings across all modules, each with the versions that fix it.
+          cat > gate.jq <<'EOF'
+          (if type == "array" then . else [.] end)
+          | map((.vulnerabilities // [])[])
+          | map(select(.severity == "medium" or .severity == "high" or .severity == "critical"))
+          | unique_by(.id + "|" + .packageName + "|" + .version)
+          | map({sev: .severity, pkg: (.packageName + "@" + .version), title: .title, id: .id, fixedIn: (.fixedIn // [])})
+          EOF
+          fixable=$(jq -r -f gate.jq snyk-oss.json | jq -r 'map(select(.fixedIn | length > 0))[] | "  [\(.sev)] \(.pkg): \(.title) (fixed in \(.fixedIn | join(", "))) \(.id)"')
+          unfixable=$(jq -r -f gate.jq snyk-oss.json | jq -r 'map(select(.fixedIn | length == 0))[] | "  [\(.sev)] \(.pkg): \(.title) \(.id)"')
+          if [ -n "$unfixable" ]; then
+            echo "Findings with no published fix yet (reported, NOT blocking):"
+            echo "$unfixable"
+          fi
+          if [ -n "$fixable" ]; then
+            echo "::error::Dependency findings with an available fix (medium or higher) block the release:"
+            echo "$fixable"
+            exit 1
+          fi
+          echo "No dependency findings of medium severity or higher have an available fix."
+      - name: Snyk Code (source)
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: npx --yes "snyk@${SNYK_VERSION}" code test --severity-threshold=medium
+
+  # ------------------------------------------------------------- publish
+  # Runs only for version tags (v1.2.3), after the tests AND the Snyk gate pass on the same commit.
+  # The tag is the version of record: the POM version is set from it at build time.
+  publish:
+    name: Publish to Maven Central
+    needs: [test, snyk]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    # Secrets live in this GitHub Environment (Settings > Environments). Add required reviewers
+    # there to gate every release behind a manual approval.
+    environment: maven-central
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25   # current LTS; bytecode is still released for Java 21 (java.version in pom.xml)
+          cache: maven
+          # setup-java writes settings.xml with a `central` server whose credentials are read from
+          # these environment variables at run time -- nothing is stored in the file or the repo.
+          server-id: central
+          server-username: CENTRAL_USERNAME
+          server-password: CENTRAL_PASSWORD
+          # Imports the signing key into the runner's keyring; passphrase is read from the env var.
+          gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+      - name: Set version from tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="${TAG#v}"
+          mvn --batch-mode --no-transfer-progress \
+            org.codehaus.mojo:versions-maven-plugin:2.18.0:set \
+            -DnewVersion="$version" -DgenerateBackupPoms=false
+      - name: Sign and publish
+        # Tests already passed in the `test` job for this commit, so they are skipped here.
+        run: mvn --batch-mode --no-transfer-progress -Prelease -DskipTests deploy
+        env:
+          CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}

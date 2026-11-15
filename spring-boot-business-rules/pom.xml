@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.braintrustappliedresearch</groupId>
+    <artifactId>spring-boot-business-rules-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>spring-boot-business-rules</artifactId>
+  <name>spring-boot-business-rules</name>
+  <description>Auto-configures a DMN (KIE) rules engine behind a REST endpoint</description>
+
+  <properties>
+    <checkstyle.config>${project.basedir}/../config/checkstyle.xml</checkstyle.config>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-webmvc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.kie</groupId>
+      <artifactId>kie-dmn-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-configuration-processor</artifactId>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-webmvc-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <!-- Apache-2.0 convention: LICENSE and NOTICE ship inside the jar from src/main/resources/META-INF.
+         They are copies of the repository-root files (keep them in sync). They are copied here, and not pulled in
+         with a resource directory of ${project.basedir}/.., because IDEs cannot map a resource folder that is
+         outside the module ("directory outside of project base directory"). -->
+    <plugins>
+      <!-- JDK 23+ no longer runs annotation processors found on the classpath unless they are named explicitly.
+           Without this, a build on JDK 23+ (the release job uses 25) ships no spring-configuration-metadata.json,
+           and IDEs lose completion and hover docs for the spring-boot-business-rules.* properties. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>org.springframework.boot</groupId>
+              <artifactId>spring-boot-configuration-processor</artifactId>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-checkstyle-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>com.github.spotbugs</groupId>
+        <artifactId>spotbugs-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>

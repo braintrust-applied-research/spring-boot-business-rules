@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/"
+             id="model-a" name="ModelA" namespace="https://example.test/model-a">
+
+  <inputData id="i_x" name="x"><variable id="v_x" name="x" typeRef="number"/></inputData>
+
+  <decision id="d_model-a1" name="Double">
+    <variable id="v_model-a1" name="Double" typeRef="number"/>
+    <informationRequirement id="ir_model-a1"><requiredInput href="#i_x"/></informationRequirement>
+    <literalExpression id="le_model-a1"><text>x * 2</text></literalExpression>
+  </decision>
+
+  <decision id="d_model-a2" name="Triple">
+    <variable id="v_model-a2" name="Triple" typeRef="number"/>
+    <informationRequirement id="ir_model-a2"><requiredInput href="#i_x"/></informationRequirement>
+    <literalExpression id="le_model-a2"><text>x * 3</text></literalExpression>
+  </decision>
+</definitions>

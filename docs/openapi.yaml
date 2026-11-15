@@ -1,0 +1,184 @@
+openapi: 3.0.3
+info:
+  title: spring-boot-business-rules
+  version: 0.1.0
+  description: |
+    DMN business rules exposed over REST.
+
+    The endpoint lives at `{server context-path}{spring-boot-business-rules.path}`. The paths below use the
+    example app's configuration (`server.servlet.context-path=/api`,
+    `spring-boot-business-rules.path=/business/rules`); change the server variable or path to match your app.
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.txt
+security: []   # the library adds no authentication; secure the endpoint in your application
+servers:
+  - url: '{baseUrl}{contextPath}'
+    variables:
+      baseUrl:
+        default: http://localhost:8080
+      contextPath:
+        default: /api
+paths:
+  /business/rules:
+    get:
+      operationId: instructions
+      summary: Usage instructions
+      description: |
+        Returns usage help, the effective `spring-boot-business-rules.*` configuration, and the loaded DMN models,
+        their inputs and decisions.
+
+        **Disabled by default.** It is only served when `spring-boot-business-rules.instructions-enabled=true`
+        (the example app enables it). Otherwise this operation does not exist and the path answers `405`.
+      responses:
+        '200':
+          description: Instructions (only when `instructions-enabled=true`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Instructions'
+        '405':
+          description: Instructions are not enabled (the default); only `POST` is allowed
+    post:
+      operationId: evaluate
+      summary: Evaluate a decision
+      description: |
+        Every key except `evaluate` and `model` must be a declared input of the DMN model and is passed to it as that
+        input. Any other key, including the name of a decision, is rejected with `400`: a value supplied under a
+        decision's name would otherwise replace that decision's result.
+        `evaluate` names the decision to run; decisions it depends on are evaluated too.
+
+        The reserved value `evaluate: all` runs **every** decision in a model and returns them all, in both `result`
+        and `decisions`. When more than one model is loaded, also send `model`. A decision that is itself named
+        `all` takes precedence over the shortcut.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvaluateRequest'
+            examples:
+              customer:
+                summary: Customer eligibility offer
+                value:
+                  firstName: Ada
+                  lastName: Lovelace
+                  age: 36
+                  income: 120000
+                  zipCode: '94105'
+                  evaluate: Offer
+      responses:
+        '200':
+          description: Decision evaluated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluateResponse'
+        '400':
+          description: |
+            Missing `evaluate` key, a key that is not a declared input of the model, or `evaluate: all` was requested
+            without a `model` while several models are loaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: |
+            No decision with that name (or, for `evaluate: all`, no model with the given `model` name or no models
+            loaded). The body lists the loaded models only when `spring-boot-business-rules.instructions-enabled=true`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: DMN evaluation reported errors (for example a missing input)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluateResponse'
+components:
+  schemas:
+    Instructions:
+      type: object
+      properties:
+        description:
+          type: string
+        usage:
+          type: object
+          additionalProperties:
+            type: string
+        configuration:
+          type: object
+          description: Effective settings, keyed by the property name that sets each one
+          properties:
+            spring-boot-business-rules.enabled:
+              type: boolean
+            spring-boot-business-rules.path:
+              type: string
+            spring-boot-business-rules.rules-location:
+              type: string
+            spring-boot-business-rules.instructions-enabled:
+              type: boolean
+        models:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModelDescription'
+        example:
+          type: object
+          additionalProperties:
+            type: string
+    ModelDescription:
+      type: object
+      properties:
+        model:
+          type: string
+        inputs:
+          type: array
+          items:
+            type: string
+        decisions:
+          type: array
+          items:
+            type: string
+    EvaluateRequest:
+      type: object
+      required: [evaluate]
+      description: Decision selector plus the DMN inputs, as additional properties. Each additional property must be a declared input of the model.
+      properties:
+        evaluate:
+          type: string
+          description: Name of the decision to evaluate, or the reserved value `all` to evaluate every decision in a model
+        model:
+          type: string
+          description: |
+            Optional model name, to disambiguate decisions with the same name across models. Required for
+            `evaluate: all` when more than one model is loaded.
+      additionalProperties: true
+    EvaluateResponse:
+      type: object
+      properties:
+        evaluate:
+          type: string
+        model:
+          type: string
+        result:
+          description: |
+            Result of the requested decision (any JSON value, possibly null). For `evaluate: all` this is the same
+            object as `decisions`.
+        decisions:
+          type: object
+          description: Results of every decision evaluated, by name
+          additionalProperties: true
+        messages:
+          type: array
+          items:
+            type: string
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        models:
+          type: array
+          items:
+            $ref: '#/components/schemas/ModelDescription'

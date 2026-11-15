@@ -1,2 +1,398 @@
 # spring-boot-business-rules
-Opinionated repository to connect DSL-based business rules to Spring Boot 4.0.7+
+
+Opinionated repository to connect DSL-based business rules to Spring Boot 4.0.9+.
+
+Drop in the `spring-boot-business-rules` artifact and a [DMN](https://www.omg.org/spec/DMN) rules engine
+(KIE / Drools 10.x) is exposed over REST. No code required.
+
+> **Note:** this project was created quickly using AI. It scratches an itch for people who want an opinionated way
+> to bring [KIE](https://kie.apache.org/) and its DSL business rule language (DMN) into Spring Boot. Review it
+> before relying on it, and contributions are welcome.
+
+**Docs:** https://braintrust-applied-research.github.io/spring-boot-business-rules/ ·
+[API reference (Swagger UI)](https://braintrust-applied-research.github.io/spring-boot-business-rules/api/) ·
+[Javadoc](https://braintrust-applied-research.github.io/spring-boot-business-rules/javadoc/)
+
+## Rules as decision tables
+
+Business rules here are [DMN](https://www.omg.org/spec/DMN) models: a diagram of how decisions depend on each other,
+where each decision is a small expression or a decision table you read like a spreadsheet. This is the example app's
+ruleset, `customer-rules.dmn`, in the KIE DMN editor for VS Code:
+
+![The CustomerRules ruleset as a decision requirements diagram: the inputs firstName, lastName, age, income and zipCode feed the decisions Greeting, Eligibility and Offer](docs/images/customer-rules-diagram.png)
+
+Ovals are the inputs you send in the request and rectangles are decisions. `Offer` needs `Greeting`, `Eligibility` and
+`zipCode`, so asking for `Offer` evaluates the decisions it depends on too (or send `"evaluate":"all"` to get every
+decision at once). `Greeting` and `Offer` are short expressions, and `Eligibility` is a decision table. Here is that
+table:
+
+![The Eligibility decision table in the KIE DMN editor: four rules over age and income that give Declined, Approved, Referred or Declined](docs/images/eligibility-decision-table.png)
+
+A table like this is easier to look at, and to review, than the same logic written as nested `if`/`else` or `switch`
+statements:
+
+- **Each row is one rule and each column is one input**, so the whole policy fits on one screen.
+- **Boundaries are visible at a glance** (age 18, income 30,000 and 75,000) instead of being buried inside conditions.
+- **Rows do not depend on each other.** The `U` (unique) hit policy means exactly one row matches any input, and the
+  editor flags rules that overlap. In code you have to trace the order of the branches by hand, because every
+  `else` quietly assumes the lines above it did not match.
+- **People who are not developers can read it**: analysts, compliance, and product owners can review and change a
+  table without reading Java, and a rule change is an edit to a row, not to control flow.
+
+For comparison, this is the same logic as code:
+
+```java
+if (age < 18) return "Declined";
+if (income >= 75000) return "Approved";
+if (income >= 30000) return "Referred";
+return "Declined";
+```
+
+It looks short only because there are four rules and the statement order is doing hidden work. A real policy with
+ten inputs and a hundred rules stays readable as a table, and rarely does as nested conditionals. The model is in
+`example/src/main/resources/rules/customer-rules.dmn`; see "Adding a rule and testing it" below to write your own.
+
+## Layout
+
+| Module | Purpose |
+| --- | --- |
+| `spring-boot-business-rules/` | Auto-configured library: DMN engine + REST endpoint |
+| `example/` | Spring Boot 4.0.9 app with a `CustomerRules` DMN model |
+
+## Using the artifact
+
+```xml
+<dependency>
+  <groupId>com.braintrustappliedresearch</groupId>
+  <artifactId>spring-boot-business-rules</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+</dependency>
+```
+
+Put `.dmn` files under `src/main/resources/rules/`. Configuration:
+
+| Property | Default | Meaning |
+| --- | --- | --- |
+| `spring-boot-business-rules.path` | `/rules` | Endpoint path, **appended to** `server.servlet.context-path` (and any `spring.mvc.servlet.path`) |
+| `spring-boot-business-rules.rules-location` | `classpath*:rules/**/*.dmn` | Where to find DMN models |
+| `spring-boot-business-rules.enabled` | `true` | Turn the endpoint off |
+| `spring-boot-business-rules.instructions-enabled` | `false` | Serve `GET <path>` (usage help plus the loaded models, inputs and decisions). **Off by default; opt in to use it** |
+
+With `server.servlet.context-path=/api` and `spring-boot-business-rules.path=/business/rules`, the endpoint is `/api/business/rules`.
+
+## API
+
+- `GET <path>` returns usage instructions, the effective `spring-boot-business-rules.*` settings, and the loaded
+  models with their inputs and decisions. **It is disabled by default** because it reveals the shape of your rules
+  and where they are loaded from. Set `spring-boot-business-rules.instructions-enabled=true` to
+  turn it on. When it is off, a `GET` gets `405 Method Not Allowed` (only `POST` exists), and a `404` from `POST` does
+  not list the models either.
+- `POST <path>` takes a JSON body: every key except `evaluate` (and optional `model`) must be a declared DMN input of
+  the model; `evaluate` names the decision to run. Dependent decisions are evaluated too. Any other key, including the
+  name of a decision, is rejected with `400`: a value supplied under a decision's name would otherwise replace that
+  decision's result and let a caller bypass the rule.
+  Use `"evaluate":"all"` to run every decision in a model in one call (see below).
+  Responses: `200` result, `400` missing `evaluate`, an unknown input, or an ambiguous `all`, `404` unknown decision,
+  `422` DMN evaluation errors.
+
+### Evaluating every decision at once
+
+Instead of calling `Greeting`, `Eligibility` and `Offer` one by one, send the reserved value `"evaluate":"all"`. It runs
+every decision in the model and returns them all:
+
+```sh
+curl -X POST localhost:8080/api/business/rules -H 'Content-Type: application/json' \
+  -d '{"firstName":"Ada","lastName":"Lovelace","age":36,"income":120000,"zipCode":"94105","evaluate":"all"}'
+```
+
+```json
+{
+  "evaluate": "all",
+  "model": "CustomerRules",
+  "result":    { "Offer": "Hello, Ada Lovelace: you are pre-approved (region 941)", "Greeting": "Hello, Ada Lovelace", "Eligibility": "Approved" },
+  "decisions": { "Offer": "Hello, Ada Lovelace: you are pre-approved (region 941)", "Greeting": "Hello, Ada Lovelace", "Eligibility": "Approved" },
+  "messages": []
+}
+```
+
+- `result` and `decisions` hold the same map for `all`, so you can read either one.
+- Supply the inputs for every decision you want. If an input is missing, you get `422` with the reason in `messages`,
+  and the decisions that could be computed still come back; the ones that could not are `null`.
+- Inputs are shared across a model's decisions, so with **more than one model loaded** you must also send
+  `"model":"<ModelName>"`. Without it you get `400`, and an unknown model name gets `404`.
+- If a model defines a decision that is itself named `all`, that decision keeps its meaning: it is evaluated and the
+  shortcut does not apply to that model.
+
+## Running the example API
+
+Requires Java 21+ (CI tests on 21 and 25) and Maven 3.9+. The repository has no Maven wrapper.
+
+```sh
+mvn verify
+java -jar example/target/spring-boot-business-rules-example-0.1.0-SNAPSHOT.jar
+```
+
+The app prints a custom startup banner (`example/src/main/resources/banner.txt`) and starts on port 8080 (override with
+`--server.port=9090`). The endpoint is
+`http://localhost:8080/api/business/rules`: `/api` is the context path set in
+`example/src/main/resources/application.yml`, and `/business/rules` is `spring-boot-business-rules.path`.
+
+The example app sets `spring-boot-business-rules.instructions-enabled: true` in `application.yml`, so you can ask
+the endpoint what it can do, then evaluate a decision:
+
+```sh
+curl localhost:8080/api/business/rules
+
+curl -X POST localhost:8080/api/business/rules -H 'Content-Type: application/json' \
+  -d '{"firstName":"Ada","lastName":"Lovelace","age":36,"income":120000,"zipCode":"94105","evaluate":"Offer"}'
+```
+
+The `GET` lists the effective settings and every loaded model with its inputs and decisions. The `POST` returns the requested decision under
+`result`, plus every decision that was evaluated along the way:
+
+```json
+{
+  "evaluate": "Offer",
+  "model": "CustomerRules",
+  "result": "Hello, Ada Lovelace: you are pre-approved (region 941)",
+  "decisions": {
+    "Offer": "Hello, Ada Lovelace: you are pre-approved (region 941)",
+    "Greeting": "Hello, Ada Lovelace",
+    "Eligibility": "Approved"
+  },
+  "messages": []
+}
+```
+
+Try `"evaluate":"Eligibility"` with different `age` and `income` values to see the decision table's other outcomes.
+
+## Adding a rule and testing it
+
+Rules are [DMN](https://www.omg.org/spec/DMN) models. On startup the app loads every `.dmn` file under
+`src/main/resources/rules/` (`spring-boot-business-rules.rules-location`), so a new rule is either a new decision in an
+existing file or a new file. **Restart the app after changing a rule.** This walkthrough adds a new model that assigns a
+loyalty tier to a customer.
+
+### 1. Create the model
+
+Create `example/src/main/resources/rules/loyalty-rules.dmn`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/"
+             xmlns:dmndi="https://www.omg.org/spec/DMN/20191111/DMNDI/"
+             xmlns:dc="http://www.omg.org/spec/DMN/20180521/DC/"
+             xmlns:di="http://www.omg.org/spec/DMN/20180521/DI/"
+             id="loyalty-rules" name="LoyaltyRules"
+             namespace="https://github.com/braintrust-applied-research/spring-boot-business-rules/example/loyalty">
+
+  <inputData id="i_annualSpend" name="annualSpend"><variable id="v_annualSpend" name="annualSpend" typeRef="number"/></inputData>
+  <inputData id="i_yearsAsCustomer" name="yearsAsCustomer"><variable id="v_yearsAsCustomer" name="yearsAsCustomer" typeRef="number"/></inputData>
+
+  <decision id="d_loyaltyTier" name="LoyaltyTier">
+    <variable id="v_loyaltyTier" name="LoyaltyTier" typeRef="string"/>
+    <informationRequirement id="ir_l1"><requiredInput href="#i_annualSpend"/></informationRequirement>
+    <informationRequirement id="ir_l2"><requiredInput href="#i_yearsAsCustomer"/></informationRequirement>
+    <decisionTable id="dt_loyaltyTier" hitPolicy="UNIQUE">
+      <input id="dt_in_spend" label="annualSpend">
+        <inputExpression id="dt_ie_spend" typeRef="number"><text>annualSpend</text></inputExpression>
+      </input>
+      <input id="dt_in_years" label="yearsAsCustomer">
+        <inputExpression id="dt_ie_years" typeRef="number"><text>yearsAsCustomer</text></inputExpression>
+      </input>
+      <output id="dt_out" label="LoyaltyTier"/>
+      <rule id="r1">
+        <description>Big spenders are Platinum</description>
+        <inputEntry id="r1_i1"><text>&gt;= 10000</text></inputEntry>
+        <inputEntry id="r1_i2"><text>-</text></inputEntry>
+        <outputEntry id="r1_o"><text>"Platinum"</text></outputEntry>
+      </rule>
+      <rule id="r2">
+        <description>Steady spenders who stuck around are Gold</description>
+        <inputEntry id="r2_i1"><text>[2500..10000)</text></inputEntry>
+        <inputEntry id="r2_i2"><text>&gt;= 3</text></inputEntry>
+        <outputEntry id="r2_o"><text>"Gold"</text></outputEntry>
+      </rule>
+      <rule id="r3">
+        <description>Mid spenders who are newer customers are Standard</description>
+        <inputEntry id="r3_i1"><text>[2500..10000)</text></inputEntry>
+        <inputEntry id="r3_i2"><text>&lt; 3</text></inputEntry>
+        <outputEntry id="r3_o"><text>"Standard"</text></outputEntry>
+      </rule>
+      <rule id="r4">
+        <description>Low spenders are Standard</description>
+        <inputEntry id="r4_i1"><text>&lt; 2500</text></inputEntry>
+        <inputEntry id="r4_i2"><text>-</text></inputEntry>
+        <outputEntry id="r4_o"><text>"Standard"</text></outputEntry>
+      </rule>
+    </decisionTable>
+  </decision>
+
+  <dmndi:DMNDI>
+    <dmndi:DMNDiagram id="dmndi_loyalty_rules" name="DRG">
+      <dmndi:DMNShape id="dmnshape_i_annualSpend" dmnElementRef="i_annualSpend" isCollapsed="false">
+        <dc:Bounds x="40" y="220" width="100" height="50"/>
+      </dmndi:DMNShape>
+      <dmndi:DMNShape id="dmnshape_i_yearsAsCustomer" dmnElementRef="i_yearsAsCustomer" isCollapsed="false">
+        <dc:Bounds x="200" y="220" width="100" height="50"/>
+      </dmndi:DMNShape>
+      <dmndi:DMNShape id="dmnshape_d_loyaltyTier" dmnElementRef="d_loyaltyTier" isCollapsed="false">
+        <dc:Bounds x="90" y="60" width="160" height="80"/>
+      </dmndi:DMNShape>
+      <dmndi:DMNEdge id="dmnedge_ir_l1" dmnElementRef="ir_l1">
+        <di:waypoint x="90" y="220"/>
+        <di:waypoint x="170" y="140"/>
+      </dmndi:DMNEdge>
+      <dmndi:DMNEdge id="dmnedge_ir_l2" dmnElementRef="ir_l2">
+        <di:waypoint x="250" y="220"/>
+        <di:waypoint x="170" y="140"/>
+      </dmndi:DMNEdge>
+    </dmndi:DMNDiagram>
+  </dmndi:DMNDI>
+</definitions>
+```
+
+How the pieces map to the API:
+
+- Each `inputData` name (`annualSpend`, `yearsAsCustomer`) is a JSON key you send in the `POST` body. Only declared
+  inputs are accepted; any other key gets a `400`.
+- Each `decision` name (`LoyaltyTier`) is a value you pass as `"evaluate"`.
+- In a decision table, `-` means "any value", and entries are [FEEL](https://www.omg.org/spec/DMN) expressions
+  (`>= 2500`, `[30000..75000)`, `"Gold"`). With `hitPolicy="UNIQUE"` exactly one rule must match any input, so write
+  rules that do not overlap: every combination of inputs belongs to one row. That keeps the table independent of row
+  order and easy to review, and the KIE DMN editor warns when rules overlap. Other policies such as `FIRST` are valid
+  DMN, but `FIRST` depends on row order and the editor flags it. For a single-output table, put the type on the
+  decision's `variable` and leave `typeRef` off the `output`.
+- Give each model its own `name` and `namespace`. Names are case-sensitive.
+
+The `dmndi:DMNDI` section at the bottom is only the diagram layout (where each box sits and how the arrows run). The
+engine ignores it, but DMN editors such as the KIE DMN editor for VS Code need it to draw the model, so keep it if you
+want the file to open visually. Opening a model in the KIE editor rewrites it in the editor's own format (it
+reformats the file and may upgrade the DMN version, for example to 1.6); that is expected, and the engine reads the
+result. You can also write DMN in any DMN-compliant editor and drop the resulting file into `rules/`.
+
+### 2. Try it by hand
+
+Rebuild, restart the app, and confirm the new model shows up:
+
+```sh
+mvn verify
+java -jar example/target/spring-boot-business-rules-example-0.1.0-SNAPSHOT.jar
+
+curl localhost:8080/api/business/rules      # "models" now includes LoyaltyRules
+
+curl -X POST localhost:8080/api/business/rules -H 'Content-Type: application/json' \
+  -d '{"annualSpend":3000,"yearsAsCustomer":4,"evaluate":"LoyaltyTier"}'
+# {"evaluate":"LoyaltyTier","model":"LoyaltyRules","result":"Gold","decisions":{"LoyaltyTier":"Gold"},"messages":[]}
+```
+
+Leave out an input (for example `yearsAsCustomer`) and you get `422` with the DMN error in `messages`. An unknown
+`evaluate` value returns `404` with the list of available models. If two models define a decision with the same name,
+add `"model":"LoyaltyRules"` to the request to choose one.
+
+### 3. Add an automated test
+
+The example's integration test starts the whole app on a random port and calls the real endpoint. Add a test to
+`example/src/test/java/com/braintrustappliedresearch/example/RulesEndpointTest.java`, using its existing `post` helper:
+
+```java
+@Test
+void loyaltyTiers() throws Exception {
+    assertThat(post("""
+            {"annualSpend":12000,"yearsAsCustomer":1,"evaluate":"LoyaltyTier"}""")
+            .body()).contains("\"result\":\"Platinum\"");
+    assertThat(post("""
+            {"annualSpend":3000,"yearsAsCustomer":4,"evaluate":"LoyaltyTier"}""")
+            .body()).contains("\"result\":\"Gold\"");
+    assertThat(post("""
+            {"annualSpend":3000,"yearsAsCustomer":1,"evaluate":"LoyaltyTier"}""")
+            .body()).contains("\"result\":\"Standard\"");
+}
+```
+
+Run it with the rest of the suite (`mvn verify`), or just the example module:
+
+```sh
+mvn -pl example -am verify
+```
+
+Cover each rule row plus the catch-all, and include the boundary values (here `2500` and `10000`).
+
+## Code quality checks
+
+`mvn verify` runs these checks in every module, and any finding fails the build:
+
+| Check | What it catches | Config |
+| --- | --- | --- |
+| javac `-Xlint:all -Werror` | Compiler warnings: deprecations, unchecked casts, raw types and so on | `pom.xml` (`maven-compiler-plugin`) |
+| javac `-Xdoclint` | Missing or malformed Javadoc on public and protected API (the library requires full docs) | `pom.xml` (`maven-compiler-plugin`) |
+| Checkstyle | Style and hygiene: tabs, trailing whitespace, unused or star imports, braces, indentation, line length (140) | `config/checkstyle.xml` |
+| SpotBugs | Likely bugs: null dereferences, exposed mutable state, constructors that throw and so on | `pom.xml` (`spotbugs-maven-plugin`) |
+
+Run one check on its own with `mvn checkstyle:check` or `mvn compile` (lint runs at compile time). SpotBugs needs
+compiled classes, so use `mvn verify -DskipTests`. CI runs the same checks, so a finding fails the pull request too.
+
+To run the checks automatically before every commit, enable the bundled hook once per clone:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+It runs `mvn verify -DskipTests`, which takes about 10 seconds. Use `git commit --no-verify` to skip it. Style choices
+that the `.editorconfig` expresses (4-space Java, 2-space XML/YAML, LF endings) are enforced for Java by Checkstyle.
+
+## Pipeline
+
+`.github/workflows/ci.yml` has four stages:
+
+| Stage | Runs on | What it does |
+| --- | --- | --- |
+| `test` | every push and pull request | `mvn verify` (all tests) on Java 21 and 25 |
+| `docs` | push to `main`, after `test` | lints `docs/openapi.yaml`, generates the Javadoc, builds the README + Swagger UI + Javadoc site, deploys to GitHub Pages |
+| `snyk` | `v*` tags, alongside `test` | **release gate:** Snyk dependency scan (every module) and Snyk Code scan. Blocks on a dependency finding of medium severity or higher **that has a published fix** (findings with no fix yet are listed but do not block) and on any medium-or-higher Snyk Code finding |
+| `publish` | `v*` tags, after `test` **and** `snyk` | sets the version from the tag, signs, and uploads to Maven Central |
+
+Release: `git tag v1.0.0 && git push origin v1.0.0`. Nothing is published unless both `test` and `snyk` pass. CI cannot
+stop a tag from being pushed (it already exists when the workflow starts), but a tag that fails the gate publishes
+nothing. If it fails, fix the problem on `main`, delete the tag (`git tag -d v1.0.0 && git push --delete origin v1.0.0`),
+and tag again. To control who may create release tags at all, add a repository tag ruleset for `v*` (Settings → Rules).
+Build the docs site locally with `./docs/build-site.sh`.
+The Javadoc is generated from the comments in the source, so it is not committed. The site serves it at
+`/javadoc/`. To build just the API docs, run `mvn -pl spring-boot-business-rules javadoc:javadoc` and open
+`spring-boot-business-rules/target/reports/apidocs/index.html`. Javadoc warnings fail the build, so write a comment
+(with `@param` and `@return`) for anything public you add to the library.
+
+### Secrets and one-time setup
+
+Nothing secret is in the repository or the workflow file. Everything below is configured in GitHub.
+
+**GitHub Environment `maven-central`** (Settings → Environments). Store these as *environment secrets*, and add
+required reviewers so each release needs a manual approval:
+
+| Secret | What it is |
+| --- | --- |
+| `MAVEN_CENTRAL_USERNAME` | Central Portal user token, username half (central.sonatype.com → Account → Generate User Token) |
+| `MAVEN_CENTRAL_PASSWORD` | Central Portal user token, password half |
+| `MAVEN_GPG_PRIVATE_KEY` | ASCII-armored private key: `gpg --armor --export-secret-keys <KEY_ID>` |
+| `MAVEN_GPG_PASSPHRASE` | Passphrase for that key |
+
+**Repository secret `SNYK_TOKEN`** (Settings → Secrets and variables → Actions) is the Snyk API token for the release
+gate. A Snyk service account token is preferable to a personal one. If the secret is missing, the `snyk` stage fails
+(it does not skip), so a release cannot go out without the scan. Snyk Code must be enabled for your Snyk organization
+for `snyk code test` to run.
+
+Also required:
+
+- **GitHub Pages**: Settings → Pages → Build and deployment → Source: *GitHub Actions*. **Do this before the first
+  merge to `main`.** If the source is left on "Deploy from a branch", GitHub runs its own built-in "pages build and
+  deployment" job, which builds `/docs` with Jekyll (and fails if the folder does not exist) instead of publishing the
+  site built by the `docs` stage. This is a repository setting, not something the workflow can change. This is a project
+  site, so it is served at `https://braintrust-applied-research.github.io/spring-boot-business-rules/`. The docs stage
+  needs no secrets (it uses the workflow's OIDC token).
+- **Central namespace**: the `com.braintrustappliedresearch` groupId must be verified on central.sonatype.com
+  (Namespaces → add it, then publish the DNS TXT record the Portal gives you on `braintrustappliedresearch.com`).
+- **Public GPG key**: publish it to a keyserver (e.g. `keys.openpgp.org`) so Central can verify signatures.
+
+## License
+
+[Apache License 2.0](LICENSE). Copyright 2026 Braintrust Applied Research, LLC.
