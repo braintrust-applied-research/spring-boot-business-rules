@@ -10,18 +10,20 @@ on:
 permissions:
   contents: read
 
+# Runner image is pinned (ubuntu-24.04) instead of `ubuntu-latest`: GitHub is migrating the `latest` label to Ubuntu 26,
+# which would change the toolchain under us without a commit. Move to a newer image deliberately, after testing.
 jobs:
   # ---------------------------------------------------------------- test
   test:
     name: Test (Java ${{ matrix.java }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         java: [21, 25]   # previous LTS (bytecode baseline) and current LTS
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: ${{ matrix.java }}
@@ -30,7 +32,7 @@ jobs:
         run: mvn --batch-mode --no-transfer-progress verify
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: surefire-reports-java${{ matrix.java }}
           path: '**/target/surefire-reports/'
@@ -42,7 +44,7 @@ jobs:
     name: Publish docs
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       pages: write       # deploy to GitHub Pages
@@ -54,23 +56,23 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - uses: actions/setup-java@v4   # Javadoc is generated with Maven
+      - uses: actions/setup-java@v6   # Javadoc is generated with Maven
         with:
           distribution: temurin
           java-version: 21
           cache: maven
       - name: Lint spec, generate Javadoc and build site
         run: ./docs/build-site.sh
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
   # --------------------------------------------------------------- snyk
   # Release gate. Runs only for version tags, in parallel with `test`, and `publish` needs it. It blocks the
@@ -87,19 +89,19 @@ jobs:
   snyk:
     name: Snyk security gate
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     env:
       SNYK_VERSION: 1.1308.4   # pinned, like the other tool versions in this repo; bump deliberately
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4   # Snyk resolves the Maven dependency tree with mvn
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6   # Snyk resolves the Maven dependency tree with mvn
         with:
           distribution: temurin
           java-version: 21
           cache: maven
-      - uses: actions/setup-node@v4   # the Snyk CLI is run from npm
+      - uses: actions/setup-node@v7   # the Snyk CLI is run from npm
         with:
           node-version: 22
       - name: Require SNYK_TOKEN
@@ -163,15 +165,15 @@ jobs:
     name: Publish to Maven Central
     needs: [test, snyk]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     # Secrets live in this GitHub Environment (Settings > Environments). Add required reviewers
     # there to gate every release behind a manual approval.
     environment: maven-central
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 25   # current LTS; bytecode is still released for Java 21 (java.version in pom.xml)

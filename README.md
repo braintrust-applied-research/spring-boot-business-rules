@@ -383,9 +383,12 @@ for `snyk code test` to run.
 
 Also required:
 
-- **GitHub Pages**: Settings → Pages → Source: *GitHub Actions*. This is a project site, so it is served at
-  `https://braintrust-applied-research.github.io/spring-boot-business-rules/`. The docs stage needs no secrets (it uses the
-  workflow's OIDC token).
+- **GitHub Pages**: Settings → Pages → Build and deployment → Source: *GitHub Actions*. **Do this before the first
+  merge to `main`.** If the source is left on "Deploy from a branch", GitHub runs its own built-in "pages build and
+  deployment" job, which builds `/docs` with Jekyll (and fails if the folder does not exist) instead of publishing the
+  site built by the `docs` stage. This is a repository setting, not something the workflow can change. This is a project
+  site, so it is served at `https://braintrust-applied-research.github.io/spring-boot-business-rules/`. The docs stage
+  needs no secrets (it uses the workflow's OIDC token).
 - **Central namespace**: the `com.braintrustappliedresearch` groupId must be verified on central.sonatype.com
   (Namespaces → add it, then publish the DNS TXT record the Portal gives you on `braintrustappliedresearch.com`).
 - **Public GPG key**: publish it to a keyserver (e.g. `keys.openpgp.org`) so Central can verify signatures.
