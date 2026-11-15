@@ -9,9 +9,9 @@ Drop in the `spring-boot-business-rules` artifact and a [DMN](https://www.omg.or
 > to bring [KIE](https://kie.apache.org/) and its DSL business rule language (DMN) into Spring Boot. Review it
 > before relying on it, and contributions are welcome.
 
-**Docs:** https://braintrust-applied-research.github.io/spring-boot-business-rules/ ·
-[API reference (Swagger UI)](https://braintrust-applied-research.github.io/spring-boot-business-rules/api/) ·
-[Javadoc](https://braintrust-applied-research.github.io/spring-boot-business-rules/javadoc/)
+**Docs:** https://www.braintrustappliedresearch.com/spring-boot-business-rules/ ·
+[API reference (Swagger UI)](https://www.braintrustappliedresearch.com/spring-boot-business-rules/api/) ·
+[Javadoc](https://www.braintrustappliedresearch.com/spring-boot-business-rules/javadoc/)
 
 ## Rules as decision tables
 
@@ -386,9 +386,10 @@ Also required:
 - **GitHub Pages**: Settings → Pages → Build and deployment → Source: *GitHub Actions*. **Do this before the first
   merge to `main`.** If the source is left on "Deploy from a branch", GitHub runs its own built-in "pages build and
   deployment" job, which builds `/docs` with Jekyll (and fails if the folder does not exist) instead of publishing the
-  site built by the `docs` stage. This is a repository setting, not something the workflow can change. This is a project
-  site, so it is served at `https://braintrust-applied-research.github.io/spring-boot-business-rules/`. The docs stage
-  needs no secrets (it uses the workflow's OIDC token).
+  site built by the `docs` stage. This is a repository setting, not something the workflow can change. The site is
+  served at `https://www.braintrustappliedresearch.com/spring-boot-business-rules/` (the organization's custom domain;
+  the `braintrust-applied-research.github.io` address redirects to it). The docs stage needs no secrets (it uses the
+  workflow's OIDC token).
 - **Central namespace**: the `com.braintrustappliedresearch` groupId must be verified on central.sonatype.com
   (Namespaces → add it, then publish the DNS TXT record the Portal gives you on `braintrustappliedresearch.com`).
 - **Public GPG key**: publish it to a keyserver (e.g. `keys.openpgp.org`) so Central can verify signatures.

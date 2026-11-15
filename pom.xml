@@ -16,7 +16,7 @@
   <packaging>pom</packaging>
   <name>spring-boot-business-rules-parent</name>
   <description>DMN business rules for Spring Boot</description>
-  <url>https://braintrust-applied-research.github.io/spring-boot-business-rules/</url>
+  <url>https://www.braintrustappliedresearch.com/spring-boot-business-rules/</url>
 
   <organization>
     <name>Braintrust Applied Research, LLC</name>

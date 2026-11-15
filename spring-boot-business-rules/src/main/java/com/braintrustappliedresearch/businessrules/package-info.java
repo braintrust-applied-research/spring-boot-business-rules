@@ -22,6 +22,6 @@
  *   -d '{"age":36,"income":120000,"evaluate":"Eligibility"}'
  * }</pre>
  *
- * @see <a href="https://braintrust-applied-research.github.io/spring-boot-business-rules/">Project documentation</a>
+ * @see <a href="https://www.braintrustappliedresearch.com/spring-boot-business-rules/">Project documentation</a>
  */
 package com.braintrustappliedresearch.businessrules;
