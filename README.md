@@ -117,6 +117,36 @@ trying inputs can work out your rules' thresholds. Protect it in the host applic
   development.
 - **Turn it off** entirely with `spring-boot-business-rules.enabled=false`.
 
+## Dependency versions
+
+This project's own `pom.xml` raises a few versions that Spring Boot manages, to pick up security fixes sooner. **Those
+overrides do not reach your application.** You get the versions your own Spring Boot manages, so check them. With Spring
+Boot 4.0.9 (the version this project builds on) they are older than the fixed ones:
+
+| Library | Spring Boot 4.0.9 manages | Fixed in | What the fix is for |
+| --- | --- | --- | --- |
+| Jackson 2 (`jackson-2-bom.version`) | 2.21.7 | 2.21.8 | a critical deserialization flaw (CVE-2026-110879) |
+| Jackson 3 (`jackson-bom.version`) | 3.1.7 | 3.1.8 | the same flaw |
+| Logback (`logback.version`) | 1.5.38 | 1.6.5 | two path-traversal flaws (CVE-2026-19880 and CVE-2026-104721) |
+
+This library does not use Jackson's polymorphic typing, so the Jackson flaw cannot be reached through it, but your
+application may use Jackson elsewhere. The Logback flaws only matter if you use a `SiftingAppender` that discriminates on
+an MDC value, and Logback 1.6 is a minor version past the line Spring Boot supports (this project's tests and startup
+pass with it). Check whether your Spring Boot version already manages fixed versions before overriding anything.
+
+To override them, if your project inherits `spring-boot-starter-parent`:
+
+```xml
+<properties>
+  <jackson-2-bom.version>2.21.8</jackson-2-bom.version>
+  <jackson-bom.version>3.1.8</jackson-bom.version>
+</properties>
+```
+
+With Gradle and the Spring Boot plugin, set `ext['jackson-2-bom.version']` and `ext['jackson-bom.version']` (the
+plugin's documented way to override managed versions; not tested here). If you import `spring-boot-dependencies` as a
+BOM instead of inheriting the parent, these properties have no effect and you must manage the versions yourself.
+
 ## API
 
 - `GET <path>` returns usage instructions, the effective `spring-boot-business-rules.*` settings, and the loaded
