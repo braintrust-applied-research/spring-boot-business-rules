@@ -23,7 +23,7 @@ ruleset, `customer-rules.dmn`, in the KIE DMN editor for VS Code:
 
 Ovals are the inputs you send in the request and rectangles are decisions. `Offer` needs `Greeting`, `Eligibility` and
 `zipCode`, so asking for `Offer` evaluates the decisions it depends on too (or send `"evaluate":"all"` to get every
-decision at once). `Greeting` and `Offer` are short expressions, and `Eligibility` is a decision table. Here is that
+decision at once, when instructions are enabled as in the example). `Greeting` and `Offer` are short expressions, and `Eligibility` is a decision table. Here is that
 table:
 
 ![The Eligibility decision table in the KIE DMN editor: four rules over age and income that give Declined, Approved, Referred or Declined](docs/images/eligibility-decision-table.png)
@@ -76,29 +76,112 @@ Put `.dmn` files under `src/main/resources/rules/`. Configuration:
 | `spring-boot-business-rules.path` | `/rules` | Endpoint path, **appended to** `server.servlet.context-path` (and any `spring.mvc.servlet.path`) |
 | `spring-boot-business-rules.rules-location` | `classpath*:rules/**/*.dmn` | Where to find DMN models |
 | `spring-boot-business-rules.enabled` | `true` | Turn the endpoint off |
-| `spring-boot-business-rules.instructions-enabled` | `false` | Serve `GET <path>` (usage help plus the loaded models, inputs and decisions). **Off by default; opt in to use it** |
+| `spring-boot-business-rules.instructions-enabled` | `false` | Let callers learn about the rules: serves `GET <path>` (usage help plus the loaded models, inputs and decisions), enables `"evaluate":"all"`, and returns detailed responses. **Off by default; opt in to use it** |
+| `spring-boot-business-rules.limits.max-inputs` | `500` | Most inputs one request may carry. A request over a limit gets `400` |
+| `spring-boot-business-rules.limits.max-name-length` | `256` | Longest `evaluate` or `model` value, input name, or name inside an input value (characters) |
+| `spring-boot-business-rules.limits.max-value-length` | `10000` | Longest single text value anywhere in the inputs, including inside lists and objects (characters) |
 
 With `server.servlet.context-path=/api` and `spring-boot-business-rules.path=/business/rules`, the endpoint is `/api/business/rules`.
+
+## Securing the endpoint
+
+**The endpoint has no authentication of its own.** Anyone who can reach your application can call `POST <path>`, and by
+trying inputs can work out your rules' thresholds. Protect it in the host application, like any API.
+
+- **No Spring Security on the classpath:** the endpoint is open, and the library logs a startup warning
+  (`UNAUTHENTICATED`) so this is not a surprise. If a gateway authenticates every request for you, silence it with
+  `logging.level.com.braintrustappliedresearch.businessrules.UnprotectedEndpointWarning=ERROR`.
+- **With `spring-boot-starter-security`:** Spring Boot blocks anonymous requests by default (they get `401`), but its
+  default setup gives API clients no way to log in, so define a `SecurityFilterChain`. This minimal example uses HTTP
+  Basic and was tested; use your real scheme (OAuth2, JWT, and so on) in production:
+
+  ```java
+  @Bean
+  SecurityFilterChain rulesSecurity(HttpSecurity http) throws Exception {
+      return http
+              .authorizeHttpRequests(a -> a.anyRequest().authenticated())
+              .httpBasic(Customizer.withDefaults())
+              .csrf(csrf -> csrf.disable())   // stateless API: no browser session, so no CSRF token
+              .build();
+  }
+  ```
+
+- **Request limits:** the library caps the number of inputs and the length of names and text values (the
+  `spring-boot-business-rules.limits.*` properties, with safe defaults) and answers `400` beyond them, without repeating
+  the offending text. It does **not** cap the request body as a whole, because Spring reads the body before the
+  controller runs, so also set a body-size limit at your gateway or server.
+- **Response headers:** every response from the endpoint, errors included, carries `X-Content-Type-Options: nosniff`
+  and `Cache-Control: no-store` (a rule result describes one request and must not be cached). A header your
+  application or Spring Security already sets is left alone.
+- **Also put in front of it:** rate limiting, and keep `spring-boot-business-rules.instructions-enabled` off outside
+  development.
+- **Turn it off** entirely with `spring-boot-business-rules.enabled=false`.
+
+## Dependency versions
+
+This project's own `pom.xml` raises a few versions that Spring Boot manages, to pick up security fixes sooner. **Those
+overrides do not reach your application.** You get the versions your own Spring Boot manages, so check them. With Spring
+Boot 4.0.9 (the version this project builds on) they are older than the fixed ones:
+
+| Library | Spring Boot 4.0.9 manages | Fixed in | What the fix is for |
+| --- | --- | --- | --- |
+| Jackson 2 (`jackson-2-bom.version`) | 2.21.7 | 2.21.8 | a critical deserialization flaw (CVE-2026-110879) |
+| Jackson 3 (`jackson-bom.version`) | 3.1.7 | 3.1.8 | the same flaw |
+| Logback (`logback.version`) | 1.5.38 | 1.6.5 | two path-traversal flaws (CVE-2026-19880 and CVE-2026-104721) |
+
+This library does not use Jackson's polymorphic typing, so the Jackson flaw cannot be reached through it, but your
+application may use Jackson elsewhere. The Logback flaws only matter if you use a `SiftingAppender` that discriminates on
+an MDC value, and Logback 1.6 is a minor version past the line Spring Boot supports (this project's tests and startup
+pass with it). Check whether your Spring Boot version already manages fixed versions before overriding anything.
+
+To override them, if your project inherits `spring-boot-starter-parent`:
+
+```xml
+<properties>
+  <jackson-2-bom.version>2.21.8</jackson-2-bom.version>
+  <jackson-bom.version>3.1.8</jackson-bom.version>
+</properties>
+```
+
+With Gradle and the Spring Boot plugin, set `ext['jackson-2-bom.version']` and `ext['jackson-bom.version']` (the
+plugin's documented way to override managed versions; not tested here). If you import `spring-boot-dependencies` as a
+BOM instead of inheriting the parent, these properties have no effect and you must manage the versions yourself.
 
 ## API
 
 - `GET <path>` returns usage instructions, the effective `spring-boot-business-rules.*` settings, and the loaded
   models with their inputs and decisions. **It is disabled by default** because it reveals the shape of your rules
   and where they are loaded from. Set `spring-boot-business-rules.instructions-enabled=true` to
-  turn it on. When it is off, a `GET` gets `405 Method Not Allowed` (only `POST` exists), and a `404` from `POST` does
-  not list the models either.
+  turn it on. When it is off the responses to `POST` are **quiet** too, so a caller cannot map your rules through
+  ordinary requests: a `GET` gets `405 Method Not Allowed` (only `POST` exists); a response names only the decision that
+  was asked for (no other decisions, no model name); DMN's messages, which name inputs, decisions and DMN ids, are
+  replaced by one generic message (the details still reach your server logs); `"evaluate":"all"` is an unknown decision
+  (`404`); and error bodies do not list the models.
 - `POST <path>` takes a JSON body: every key except `evaluate` (and optional `model`) must be a declared DMN input of
   the model; `evaluate` names the decision to run. Dependent decisions are evaluated too. Any other key, including the
   name of a decision, is rejected with `400`: a value supplied under a decision's name would otherwise replace that
-  decision's result and let a caller bypass the rule.
+  decision's result and let a caller bypass the rule. The body must be one JSON object with **no duplicate keys**, at any
+  depth: with the usual "last one wins" a gateway that checked the first `"age"` and this endpoint that used the last
+  would disagree about the request, so a duplicate (like an empty or malformed body) gets `400`.
   Use `"evaluate":"all"` to run every decision in a model in one call (see below).
-  Responses: `200` result, `400` missing `evaluate`, an unknown input, or an ambiguous `all`, `404` unknown decision,
-  `422` DMN evaluation errors.
+  Responses: `200` result, `400` an empty, malformed or duplicate-key body, missing `evaluate`, an unknown input, an
+  ambiguous `all`, or a request over a limit (`model` must be a string), `404` unknown decision,
+  `422` nothing was decided (see below).
+
+**A `null` result is never a success.** A request that is well formed but cannot be decided gets `422`, not `200`: a
+required input is missing, an input has the wrong type or is `null` (DMN only warns "no rule matched ... setting result to
+null", and for an expression like `firstName + " " + lastName` with a number it says nothing at all), or a decision
+produced no result. A warning from a decision your decision depends on counts too, so a request cannot look successful
+while a rule it relied on never matched. The body still carries whatever was computed, so a client can inspect it. Model
+your decisions so that a legitimate outcome is never `null` (give a decision table a catch-all rule or a default output);
+a decision that deliberately returns `null` is reported as `422`.
 
 ### Evaluating every decision at once
 
 Instead of calling `Greeting`, `Eligibility` and `Offer` one by one, send the reserved value `"evaluate":"all"`. It runs
-every decision in the model and returns them all:
+every decision in the model and returns them all. **It needs `spring-boot-business-rules.instructions-enabled=true`**
+(the example app sets it), because it exists to list the model's decisions; with instructions off it is an unknown
+decision and returns `404`:
 
 ```sh
 curl -X POST localhost:8080/api/business/rules -H 'Content-Type: application/json' \
@@ -350,9 +433,14 @@ that the `.editorconfig` expresses (4-space Java, 2-space XML/YAML, LF endings) 
 | `test` | every push and pull request | `mvn verify` (all tests) on Java 21 and 25 |
 | `docs` | push to `main`, after `test` | lints `docs/openapi.yaml`, generates the Javadoc, builds the README + Swagger UI + Javadoc site, deploys to GitHub Pages |
 | `snyk` | `v*` tags, alongside `test`; or a manual run (Actions → CI → Run workflow), which never publishes | **release gate:** Snyk dependency scan (every module) and Snyk Code scan. Blocks on a dependency finding of medium severity or higher **that has a published fix** (findings with no fix yet are listed but do not block) and on any medium-or-higher Snyk Code finding |
-| `publish` | `v*` tags, after `test` **and** `snyk` | sets the version from the tag, signs, and uploads to Maven Central |
+| `publish` | `v*` tags, after `test` **and** `snyk`, and your approval of the `maven-central` environment | sets the version from the tag, signs, uploads and validates the bundle on Maven Central. It does **not** release it: you click Publish in the Central Portal |
 
-Release: `git tag v1.0.0 && git push origin v1.0.0`. Nothing is published unless both `test` and `snyk` pass. CI cannot
+Release: `git tag v1.0.0 && git push origin v1.0.0`, approve the `publish` job when GitHub asks (**Review
+deployments**), then open https://central.sonatype.com/publishing/deployments, check the validated deployment, and click
+**Publish** (or **Drop** to discard it). A Central release is permanent, so the pipeline stops short of it on purpose
+(`autoPublish` is `false` in `pom.xml`). Nothing is uploaded unless both `test` and `snyk` pass. Each release also
+ships a CycloneDX software bill of materials, `spring-boot-business-rules-<version>-cyclonedx.json`, next to the jar
+(generated in the `release` profile, so it is signed and deployed with the rest). CI cannot
 stop a tag from being pushed (it already exists when the workflow starts), but a tag that fails the gate publishes
 nothing. If it fails, fix the problem on `main`, delete the tag (`git tag -d v1.0.0 && git push --delete origin v1.0.0`),
 and tag again. To control who may create release tags at all, add a repository tag ruleset for `v*` (Settings → Rules).

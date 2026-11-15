@@ -15,12 +15,18 @@
 
   <properties>
     <checkstyle.config>${project.basedir}/../config/checkstyle.xml</checkstyle.config>
+    <!-- The library is the one module that ships an SBOM in a release (see the release profile in the parent pom) -->
+    <cyclonedx.skip>false</cyclonedx.skip>
   </properties>
 
   <dependencies>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-webmvc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>tools.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
     </dependency>
     <dependency>
       <groupId>org.kie</groupId>
@@ -34,6 +40,13 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-webmvc-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- Test only: gives the tests the real SecurityFilterChain class so they can check the "Spring Security present"
+         and "absent" cases of UnprotectedEndpointWarning. It is not a dependency of the published library. -->
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-web</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

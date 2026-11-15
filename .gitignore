@@ -19,6 +19,7 @@ buildNumber.properties
 
 ### Generated documentation site (docs/build-site.sh)
 site/
+node_modules/
 
 ### MacOS
 **/.DS_Store
@@ -26,3 +27,20 @@ site/
 ### IDEs
 .idea/
 .vscode/
+
+### Secrets and credentials (never commit these; keep templates as *.example)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.kdbx
+secring.gpg
+settings-security.xml
+application-local.*
+*.tfstate
+*.tfstate.*

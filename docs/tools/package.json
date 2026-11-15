@@ -1,0 +1,10 @@
+{
+  "name": "spring-boot-business-rules-docs-tools",
+  "private": true,
+  "description": "Tools that build the documentation site (see docs/build-site.sh). Installed with `npm ci`, so every package, including transitive ones, is checked against the integrity hashes in package-lock.json.",
+  "devDependencies": {
+    "@redocly/cli": "2.78.0",
+    "marked": "18.2.0",
+    "swagger-ui-dist": "5.35.0"
+  }
+}

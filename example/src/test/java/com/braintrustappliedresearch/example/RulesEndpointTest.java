@@ -36,6 +36,8 @@ class RulesEndpointTest {
         HttpResponse<String> response = get("/api/business/rules");
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("CustomerRules", "Eligibility", "firstName", "/api/business/rules");
+        // the usage text is built from configuration, so it never contains the address this request was sent to
+        assertThat(response.body()).contains("curl -X POST <base-url>/api/business/rules").doesNotContain("localhost");
     }
 
     @Test
@@ -130,6 +132,85 @@ class RulesEndpointTest {
             assertThat(attack.statusCode()).as(evaluate).isEqualTo(400);
             assertThat(attack.body()).doesNotContain("pre-approved");
         }
+    }
+
+    @Test
+    void wrongTypedInputsAreUnprocessableNotASuccessfulNull() throws Exception {
+        HttpResponse<String> response = post("{\"age\":\"abc\",\"income\":\"x\",\"evaluate\":\"Eligibility\"}");
+        assertThat(response.statusCode()).isEqualTo(422);
+        assertThat(response.body()).contains("\"result\":null", "No rule matched");
+    }
+
+    @Test
+    void aWarningFromADependencyAlsoFailsTheRequest() throws Exception {
+        // Offer falls through to "we cannot make an offer" because Eligibility came out null; that is not an answer
+        HttpResponse<String> response = post("""
+                {"firstName":"A","lastName":"B","age":"abc","income":50000,"zipCode":"10001","evaluate":"Offer"}""");
+        assertThat(response.statusCode()).isEqualTo(422);
+        assertThat(response.body()).contains("No rule matched");
+    }
+
+    @Test
+    void oversizedRequestsAreRejectedWithoutBeingEchoed() throws Exception {
+        String manyKeys = "{\"evaluate\":\"Eligibility\"," + String.join(",",
+                java.util.stream.IntStream.range(0, 20_000).mapToObj(i -> "\"k" + i + "\":1").toList()) + "}";
+        HttpResponse<String> tooMany = post(manyKeys);
+        assertThat(tooMany.statusCode()).isEqualTo(400);
+        assertThat(tooMany.body()).contains("Too many inputs").hasSizeLessThan(300);
+
+        String longModel = "M".repeat(1024 * 1024);
+        HttpResponse<String> model = post("{\"evaluate\":\"all\",\"model\":\"" + longModel + "\"}");
+        assertThat(model.statusCode()).isEqualTo(400);
+        assertThat(model.body()).hasSizeLessThan(300).doesNotContain("MMMMMMMMMM");
+
+        String longValue = "A".repeat(20_000);
+        HttpResponse<String> value = post("{\"firstName\":\"" + longValue + "\",\"lastName\":\"x\",\"evaluate\":\"Greeting\"}");
+        assertThat(value.statusCode()).isEqualTo(400);
+        assertThat(value.body()).contains("'firstName'").hasSizeLessThan(300);
+    }
+
+    @Test
+    void everyResponseCarriesTheDefensiveHeaders() throws Exception {
+        String url = "http://localhost:" + port + "/api/business/rules";
+        java.util.Map<String, HttpResponse<String>> responses = new java.util.LinkedHashMap<>();
+        responses.put("200 evaluation", post("{\"age\":30,\"income\":50000,\"evaluate\":\"Eligibility\"}"));
+        responses.put("400 over a limit", post("{\"evaluate\":\"" + "x".repeat(300) + "\"}"));
+        responses.put("404 unknown decision", post("{\"evaluate\":\"Nope\"}"));
+        responses.put("200 instructions", get("/api/business/rules"));
+        // produced by Spring before any controller runs
+        responses.put("405 wrong method", client.send(HttpRequest.newBuilder(URI.create(url))
+                .PUT(HttpRequest.BodyPublishers.ofString("{}")).header("Content-Type", "application/json").build(),
+                HttpResponse.BodyHandlers.ofString()));
+        responses.put("415 wrong content type", client.send(HttpRequest.newBuilder(URI.create(url))
+                .POST(HttpRequest.BodyPublishers.ofString("{}")).header("Content-Type", "text/plain").build(),
+                HttpResponse.BodyHandlers.ofString()));
+
+        responses.forEach((what, response) -> {
+            assertThat(response.headers().firstValue("X-Content-Type-Options")).as(what).contains("nosniff");
+            assertThat(response.headers().firstValue("Cache-Control")).as(what).contains("no-store");
+        });
+        assertThat(responses.get("405 wrong method").statusCode()).isEqualTo(405);
+        assertThat(responses.get("415 wrong content type").statusCode()).isEqualTo(415);
+    }
+
+    @Test
+    void duplicateKeysAreRejectedOverHttp() throws Exception {
+        // a gateway that checks the first "age" (10, a minor) and an app that used the last (40) would disagree
+        HttpResponse<String> response = post("{\"age\":10,\"age\":40,\"income\":50000,\"evaluate\":\"Eligibility\"}");
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(response.body()).isEqualTo("{\"error\":\"Duplicate keys are not allowed in the request body\"}");
+
+        HttpResponse<String> evaluate = post("{\"evaluate\":\"Greeting\",\"evaluate\":\"Offer\"}");
+        assertThat(evaluate.statusCode()).isEqualTo(400);
+    }
+
+    @Test
+    void malformedBodiesGetTheEndpointsOwnErrorShape() throws Exception {
+        HttpResponse<String> response = post("{\"evaluate\":");
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(response.body()).isEqualTo("{\"error\":\"The request body is not a valid JSON object\"}");
+        assertThat(response.headers().firstValue("X-Content-Type-Options")).contains("nosniff");
+        assertThat(post("").body()).isEqualTo("{\"error\":\"The request body is empty\"}");
     }
 
     @Test

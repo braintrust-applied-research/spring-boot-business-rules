@@ -1,0 +1,50 @@
+# Dependabot opens pull requests for outdated or vulnerable dependencies and for GitHub Actions versions.
+# Commit titles follow the Conventional Commits style used in this repo (see CONTRIBUTORS.md).
+#
+# Not covered: the version overrides in the parent pom.xml's <properties> (jackson-2-bom.version, jackson-bom.version,
+# logback.version). They are BOM properties, not dependency versions, so review them by hand when Spring Boot is updated.
+version: 2
+updates:
+  - package-ecosystem: "maven"
+    directories:
+      - "/"
+      - "/spring-boot-business-rules"
+      - "/example"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      maven-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # The tools that build the docs site; Dependabot updates package.json and package-lock.json together.
+  - package-ecosystem: "npm"
+    directory: "/docs/tools"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      docs-tools:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      actions:
+        patterns:
+          - "*"

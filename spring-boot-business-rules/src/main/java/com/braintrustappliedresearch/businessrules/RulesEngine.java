@@ -17,9 +17,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.kie.api.builder.Message;
 import org.kie.api.io.Resource;
 import org.kie.dmn.api.core.DMNContext;
 import org.kie.dmn.api.core.DMNDecisionResult;
+import org.kie.dmn.api.core.DMNDecisionResult.DecisionEvaluationStatus;
 import org.kie.dmn.api.core.DMNModel;
 import org.kie.dmn.api.core.DMNResult;
 import org.kie.dmn.api.core.DMNRuntime;
@@ -159,7 +161,9 @@ public final class RulesEngine {
      * Evaluates a decision (and the decisions it depends on) against the given inputs.
      *
      * <p>DMN problems such as a missing input do not throw; they are reported through
-     * {@link Evaluation#messages()} and {@link Evaluation#hasErrors()}.
+     * {@link Evaluation#messages()} and {@link Evaluation#failed()}. An evaluation is {@code failed} when DMN reports an
+     * error or a warning, or when the requested decision comes out {@code null}: a {@code null} result means "not
+     * decided" (wrong-typed or null inputs end up there), never an answer.
      *
      * @param model        the model that contains the decision, as returned by {@link #findModel}
      * @param decisionName the decision to evaluate
@@ -171,7 +175,15 @@ public final class RulesEngine {
         DMNContext context = contextOf(runtime, model, inputs);
         DMNResult result = runtime.evaluateByName(model, context, decisionName);
         Map<String, Object> decisions = decisionResults(result);
-        return new Evaluation(model.getName(), decisions.get(decisionName), decisions, messages(result), result.hasErrors());
+        List<String> messages = new ArrayList<>(messages(result));
+        DMNDecisionResult requested = result.getDecisionResultByName(decisionName);
+        boolean noResult = requested != null && requested.getEvaluationStatus() == DecisionEvaluationStatus.SUCCEEDED
+                && requested.getResult() == null;
+        if (noResult && messages.isEmpty()) {
+            messages.add(noResultMessage(List.of(decisionName)));
+        }
+        boolean failed = result.hasErrors() || hasWarnings(result) || noResult;
+        return new Evaluation(model.getName(), decisions.get(decisionName), decisions, messages, failed);
     }
 
     /**
@@ -179,8 +191,8 @@ public final class RulesEngine {
      *
      * <p>Decisions are evaluated in dependency order. As with {@link #evaluate}, DMN problems do not throw: a
      * decision that cannot be evaluated (for example because one of its inputs is missing) is reported through
-     * {@link Evaluation#messages()} and {@link Evaluation#hasErrors()}, while the other decisions still return their
-     * values.
+     * {@link Evaluation#messages()} and {@link Evaluation#failed()}, while the other decisions still return their
+     * values. As with {@link #evaluate}, a decision that comes out {@code null} counts as a failure.
      *
      * @param model  the model whose decisions are evaluated
      * @param inputs the DMN input values, keyed by input name; keys that are not declared inputs of the model are
@@ -192,7 +204,33 @@ public final class RulesEngine {
         DMNContext context = contextOf(runtime, model, inputs);
         DMNResult result = runtime.evaluateAll(model, context);
         Map<String, Object> decisions = Collections.unmodifiableMap(decisionResults(result));
-        return new Evaluation(model.getName(), decisions, decisions, messages(result), result.hasErrors());
+        List<String> noResult = result.getDecisionResults().stream()
+                .filter(d -> d.getEvaluationStatus() == DecisionEvaluationStatus.SUCCEEDED && d.getResult() == null)
+                .map(d -> requireNonNull(d.getDecisionName()))
+                .toList();
+        List<String> messages = new ArrayList<>(messages(result));
+        if (!noResult.isEmpty() && messages.isEmpty()) {
+            messages.add(noResultMessage(noResult));
+        }
+        boolean failed = result.hasErrors() || hasWarnings(result) || !noResult.isEmpty();
+        return new Evaluation(model.getName(), decisions, decisions, messages, failed);
+    }
+
+    /**
+     * DMN only counts error-level messages as errors. A warning such as "no rule matched ... setting result to
+     * null" (what wrong-typed or null inputs to a decision table produce) is just as much a sign that nothing was
+     * decided, so it counts here too.
+     */
+    private static boolean hasWarnings(DMNResult result) {
+        return result.getMessages().stream()
+                .anyMatch(m -> m.getLevel() == Message.Level.WARNING || m.getLevel() == Message.Level.ERROR);
+    }
+
+    /** Explains a {@code null} result that DMN itself reported nothing about (FEEL turns type mismatches into null). */
+    private static String noResultMessage(List<String> decisions) {
+        String names = decisions.stream().map(d -> "'" + d + "'").collect(Collectors.joining(", "));
+        return "DMN: " + (decisions.size() == 1 ? "the decision " : "the decisions ") + names
+                + " produced no result (null) for the supplied inputs";
     }
 
     private static Map<String, Object> decisionResults(DMNResult result) {
@@ -218,10 +256,11 @@ public final class RulesEngine {
      * @param decisions the value of every decision evaluated (the requested one and its dependencies), in evaluation
      *                  order; values may be {@code null}
      * @param messages  the DMN engine's messages (errors and warnings), empty if there were none
-     * @param hasErrors {@code true} if the evaluation produced at least one error message
+     * @param failed    {@code true} if the evaluation should be treated as failed: DMN reported an error or a warning,
+     *                  or a decision that was evaluated produced no result ({@code null}, which means "not decided")
      */
     public record Evaluation(String model, Object result, Map<String, Object> decisions,
-                             List<String> messages, boolean hasErrors) {
+                             List<String> messages, boolean failed) {
 
         /** Copies {@code decisions} and {@code messages} into read-only collections so the record stays immutable. */
         public Evaluation {

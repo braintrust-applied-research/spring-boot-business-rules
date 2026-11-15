@@ -8,6 +8,11 @@ info:
     The endpoint lives at `{server context-path}{spring-boot-business-rules.path}`. The paths below use the
     example app's configuration (`server.servlet.context-path=/api`,
     `spring-boot-business-rules.path=/business/rules`); change the server variable or path to match your app.
+
+    **The endpoint has no authentication of its own.** Protect it in the host application (for example with Spring
+    Security); see the README, "Securing the endpoint".
+
+    Every response carries `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`.
   license:
     name: Apache-2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.txt
@@ -50,7 +55,16 @@ paths:
 
         The reserved value `evaluate: all` runs **every** decision in a model and returns them all, in both `result`
         and `decisions`. When more than one model is loaded, also send `model`. A decision that is itself named
-        `all` takes precedence over the shortcut.
+        `all` takes precedence over the shortcut. It is only available when
+        `spring-boot-business-rules.instructions-enabled=true`; otherwise it is an unknown decision (`404`).
+
+        **A `null` result is never a success.** If a required input is missing, an input has the wrong type or is
+        `null`, or a decision produces no result, the response is `422` and not `200`. A warning from a decision that
+        this one depends on counts too.
+
+        **Responses are quiet when instructions are off (the default).** `decisions` then holds only the requested
+        decision, `model` is omitted, and `messages` holds at most one generic message instead of DMN's text, which
+        names inputs, decisions and DMN ids.
       requestBody:
         required: true
         content:
@@ -76,22 +90,30 @@ paths:
                 $ref: '#/components/schemas/EvaluateResponse'
         '400':
           description: |
-            Missing `evaluate` key, a key that is not a declared input of the model, or `evaluate: all` was requested
-            without a `model` while several models are loaded
+            The body is empty, is not a JSON object, or has a duplicate key (at any depth), the `evaluate` key is missing,
+            a key is not a declared input of the model, `evaluate: all` was requested
+            without a `model` while several models are loaded, `model` is not a string, or the request is over a limit
+            (too many inputs, or a name or text value that is too long; see the `spring-boot-business-rules.limits.*`
+            properties). The message names the rule without repeating the offending text.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
           description: |
-            No decision with that name (or, for `evaluate: all`, no model with the given `model` name or no models
-            loaded). The body lists the loaded models only when `spring-boot-business-rules.instructions-enabled=true`.
+            No decision with that name (or, for `evaluate: all` with instructions enabled, no model with the given
+            `model` name or no models loaded). With instructions off, `evaluate: all` also returns this, as an
+            unknown decision. The body lists the loaded models only when
+            `spring-boot-business-rules.instructions-enabled=true`.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '422':
-          description: DMN evaluation reported errors (for example a missing input)
+          description: |
+            Nothing was decided: DMN reported an error or a warning (a missing input, or an input with the wrong type
+            or `null`), or a decision produced no result (`null`). A `null` result is never a successful answer. The
+            body still carries whatever was computed.
           content:
             application/json:
               schema:
@@ -105,6 +127,9 @@ components:
           type: string
         usage:
           type: object
+          description: |
+            Paths only (context path + endpoint path), built from configuration. The request's own URL, including its
+            `Host` header, is never repeated.
           additionalProperties:
             type: string
         configuration:
@@ -119,6 +144,12 @@ components:
               type: string
             spring-boot-business-rules.instructions-enabled:
               type: boolean
+            spring-boot-business-rules.limits.max-inputs:
+              type: integer
+            spring-boot-business-rules.limits.max-name-length:
+              type: integer
+            spring-boot-business-rules.limits.max-value-length:
+              type: integer
         models:
           type: array
           items:
@@ -151,8 +182,8 @@ components:
         model:
           type: string
           description: |
-            Optional model name, to disambiguate decisions with the same name across models. Required for
-            `evaluate: all` when more than one model is loaded.
+            Optional model name (it must be a string), to disambiguate decisions with the same name across models.
+            Required for `evaluate: all` when more than one model is loaded.
       additionalProperties: true
     EvaluateResponse:
       type: object
@@ -161,16 +192,20 @@ components:
           type: string
         model:
           type: string
+          description: Name of the model. Omitted when instructions are off.
         result:
           description: |
             Result of the requested decision (any JSON value, possibly null). For `evaluate: all` this is the same
             object as `decisions`.
         decisions:
           type: object
-          description: Results of every decision evaluated, by name
+          description: |
+            Results of every decision evaluated, by name. When instructions are off, only the requested decision.
           additionalProperties: true
         messages:
           type: array
+          description: |
+            DMN's messages. When instructions are off, empty or one generic message that names nothing in the model.
           items:
             type: string
     Error:
