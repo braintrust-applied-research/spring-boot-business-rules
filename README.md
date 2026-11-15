@@ -123,7 +123,15 @@ trying inputs can work out your rules' thresholds. Protect it in the host applic
   decision's result and let a caller bypass the rule.
   Use `"evaluate":"all"` to run every decision in a model in one call (see below).
   Responses: `200` result, `400` missing `evaluate`, an unknown input, or an ambiguous `all`, `404` unknown decision,
-  `422` DMN evaluation errors.
+  `422` nothing was decided (see below).
+
+**A `null` result is never a success.** A request that is well formed but cannot be decided gets `422`, not `200`: a
+required input is missing, an input has the wrong type or is `null` (DMN only warns "no rule matched ... setting result to
+null", and for an expression like `firstName + " " + lastName` with a number it says nothing at all), or a decision
+produced no result. A warning from a decision your decision depends on counts too, so a request cannot look successful
+while a rule it relied on never matched. The body still carries whatever was computed, so a client can inspect it. Model
+your decisions so that a legitimate outcome is never `null` (give a decision table a catch-all rule or a default output);
+a decision that deliberately returns `null` is reported as `422`.
 
 ### Evaluating every decision at once
 

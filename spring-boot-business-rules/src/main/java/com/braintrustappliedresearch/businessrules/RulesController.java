@@ -81,8 +81,10 @@ public class RulesController {
      *       would otherwise replace that decision's result and bypass the rule</li>
      *   <li>{@code 404}: no loaded model has a decision with that name, or the named {@code model} does not exist
      *       (the body lists the available models only if instructions are enabled)</li>
-     *   <li>{@code 422}: DMN reported errors, for example a required input was not supplied (the message is generic
-     *       when instructions are off)</li>
+     *   <li>{@code 422}: nothing was decided. DMN reported an error or a warning (a required input was not supplied,
+     *       or an input had the wrong type), or a decision produced no result ({@code null}). The body still carries
+     *       whatever was computed. A {@code null} result is never a successful answer here (the message is generic when
+     *       instructions are off)</li>
      * </ul>
      *
      * @param request the JSON body: rule inputs plus the {@code evaluate} key
@@ -148,7 +150,7 @@ public class RulesController {
             body.put("decisions", Collections.singletonMap(evaluated, evaluation.result()));
             body.put("messages", evaluation.messages().isEmpty() ? List.of() : List.of(QUIET_MESSAGE));
         }
-        return ResponseEntity.status(evaluation.hasErrors() ? HttpStatus.UNPROCESSABLE_CONTENT : HttpStatus.OK)
+        return ResponseEntity.status(evaluation.failed() ? HttpStatus.UNPROCESSABLE_CONTENT : HttpStatus.OK)
                 .body(body);
     }
 

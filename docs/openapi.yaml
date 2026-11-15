@@ -56,6 +56,10 @@ paths:
         `all` takes precedence over the shortcut. It is only available when
         `spring-boot-business-rules.instructions-enabled=true`; otherwise it is an unknown decision (`404`).
 
+        **A `null` result is never a success.** If a required input is missing, an input has the wrong type or is
+        `null`, or a decision produces no result, the response is `422` and not `200`. A warning from a decision that
+        this one depends on counts too.
+
         **Responses are quiet when instructions are off (the default).** `decisions` then holds only the requested
         decision, `model` is omitted, and `messages` holds at most one generic message instead of DMN's text, which
         names inputs, decisions and DMN ids.
@@ -101,7 +105,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '422':
-          description: DMN evaluation reported errors (for example a missing input)
+          description: |
+            Nothing was decided: DMN reported an error or a warning (a missing input, or an input with the wrong type
+            or `null`), or a decision produced no result (`null`). A `null` result is never a successful answer. The
+            body still carries whatever was computed.
           content:
             application/json:
               schema:

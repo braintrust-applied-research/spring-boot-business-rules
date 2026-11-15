@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/"
+             id="model-table" name="ModelTable" namespace="https://example.test/model-table">
+
+  <inputData id="i_n" name="n"><variable id="v_n" name="n" typeRef="number"/></inputData>
+
+  <decision id="d_band" name="Band">
+    <variable id="v_band" name="Band" typeRef="string"/>
+    <informationRequirement id="ir_band"><requiredInput href="#i_n"/></informationRequirement>
+    <decisionTable id="dt_band" hitPolicy="UNIQUE">
+      <input id="dt_band_in" label="n">
+        <inputExpression id="dt_band_ie" typeRef="number"><text>n</text></inputExpression>
+      </input>
+      <output id="dt_band_out" label="Band"/>
+      <rule id="band_r1">
+        <inputEntry id="band_r1_i"><text>&lt; 10</text></inputEntry>
+        <outputEntry id="band_r1_o"><text>"low"</text></outputEntry>
+      </rule>
+      <rule id="band_r2">
+        <inputEntry id="band_r2_i"><text>&gt;= 10</text></inputEntry>
+        <outputEntry id="band_r2_o"><text>"high"</text></outputEntry>
+      </rule>
+    </decisionTable>
+  </decision>
+
+  <decision id="d_label" name="Label">
+    <variable id="v_label" name="Label" typeRef="string"/>
+    <informationRequirement id="ir_label"><requiredDecision href="#d_band"/></informationRequirement>
+    <literalExpression id="le_label"><text>if Band = "high" then "H" else "not high"</text></literalExpression>
+  </decision>
+</definitions>

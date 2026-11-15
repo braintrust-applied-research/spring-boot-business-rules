@@ -69,6 +69,14 @@ class InstructionsDisabledTest {
     }
 
     @Test
+    void wrongTypedInputsFailWithAGenericMessage() throws Exception {
+        HttpResponse<String> response = post("{\"age\":\"abc\",\"income\":\"x\",\"evaluate\":\"Eligibility\"}");
+        assertThat(response.statusCode()).isEqualTo(422);
+        assertThat(response.body()).contains("instructions-enabled");
+        assertThat(response.body()).doesNotContain("No rule matched", "Eligibility\\'", "d_eligibility");
+    }
+
+    @Test
     void allIsNotAvailableWhenInstructionsAreOff() throws Exception {
         HttpResponse<String> response = post("""
                 {"firstName":"A","lastName":"B","age":40,"income":50000,"zipCode":"10001","evaluate":"all"}""");

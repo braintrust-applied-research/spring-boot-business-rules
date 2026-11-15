@@ -133,6 +133,22 @@ class RulesEndpointTest {
     }
 
     @Test
+    void wrongTypedInputsAreUnprocessableNotASuccessfulNull() throws Exception {
+        HttpResponse<String> response = post("{\"age\":\"abc\",\"income\":\"x\",\"evaluate\":\"Eligibility\"}");
+        assertThat(response.statusCode()).isEqualTo(422);
+        assertThat(response.body()).contains("\"result\":null", "No rule matched");
+    }
+
+    @Test
+    void aWarningFromADependencyAlsoFailsTheRequest() throws Exception {
+        // Offer falls through to "we cannot make an offer" because Eligibility came out null; that is not an answer
+        HttpResponse<String> response = post("""
+                {"firstName":"A","lastName":"B","age":"abc","income":50000,"zipCode":"10001","evaluate":"Offer"}""");
+        assertThat(response.statusCode()).isEqualTo(422);
+        assertThat(response.body()).contains("No rule matched");
+    }
+
+    @Test
     void missingInputIsUnprocessable() throws Exception {
         assertThat(post("{\"age\":30,\"evaluate\":\"Eligibility\"}").statusCode()).isEqualTo(422);
     }
