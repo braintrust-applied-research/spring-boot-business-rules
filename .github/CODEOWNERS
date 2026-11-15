@@ -1,0 +1,5 @@
+# Code owners are requested for review automatically on pull requests that touch the files they own.
+# GitHub reads this file from the pull request's base branch, so it takes effect once it is on `main`.
+# The last matching pattern wins, so add more specific patterns BELOW this catch-all.
+
+* @cpilson
