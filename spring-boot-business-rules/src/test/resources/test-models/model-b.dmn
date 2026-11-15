@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/"
+             id="model-b" name="ModelB" namespace="https://example.test/model-b">
+
+  <inputData id="i_y" name="y"><variable id="v_y" name="y" typeRef="number"/></inputData>
+
+  <decision id="d_model-b1" name="Inc">
+    <variable id="v_model-b1" name="Inc" typeRef="number"/>
+    <informationRequirement id="ir_model-b1"><requiredInput href="#i_y"/></informationRequirement>
+    <literalExpression id="le_model-b1"><text>y + 1</text></literalExpression>
+  </decision>
+</definitions>

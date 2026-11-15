@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.0.9</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.braintrustappliedresearch</groupId>
+  <artifactId>spring-boot-business-rules-parent</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+  <name>spring-boot-business-rules-parent</name>
+  <description>DMN business rules for Spring Boot</description>
+  <url>https://braintrust-applied-research.github.io/spring-boot-business-rules/</url>
+
+  <organization>
+    <name>Braintrust Applied Research, LLC</name>
+    <url>https://braintrustappliedresearch.com</url>
+  </organization>
+
+  <licenses>
+    <license>
+      <name>Apache License, Version 2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <name>Braintrust Applied Research, LLC</name>
+      <url>https://github.com/braintrust-applied-research</url>
+    </developer>
+  </developers>
+
+  <scm>
+    <connection>scm:git:https://github.com/braintrust-applied-research/spring-boot-business-rules.git</connection>
+    <developerConnection>scm:git:git@github.com:braintrust-applied-research/spring-boot-business-rules.git</developerConnection>
+    <url>https://github.com/braintrust-applied-research/spring-boot-business-rules</url>
+  </scm>
+
+  <modules>
+    <module>spring-boot-business-rules</module>
+    <module>example</module>
+  </modules>
+
+  <properties>
+    <java.version>21</java.version>
+    <kie.version>10.2.0</kie.version>
+    <!-- Security overrides of Spring Boot's managed versions (Snyk SNYK-JAVA-*JACKSON*-2176183x, CVE-2026-110879).
+         Remove each once the Spring Boot parent manages a version at least this new. -->
+    <jackson-2-bom.version>2.21.8</jackson-2-bom.version>
+    <jackson-bom.version>3.1.8</jackson-bom.version>
+    <!-- Logback 1.6.x fixes CVE-2026-19880 and CVE-2026-104721 (SiftingAppender path traversal); Spring Boot 4.0 manages
+         the 1.5.x line. Verified with the full test suite and a startup check. Drop this once Boot manages 1.6.5+. -->
+    <logback.version>1.6.5</logback.version>
+    <checkstyle.plugin.version>3.6.0</checkstyle.plugin.version>
+    <checkstyle.version>14.4.0</checkstyle.version>
+    <spotbugs.plugin.version>4.10.5.0</spotbugs.plugin.version>
+    <!-- Repository-root config. Child modules override this with ${project.basedir}/../config/checkstyle.xml -->
+    <checkstyle.config>${project.basedir}/config/checkstyle.xml</checkstyle.config>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>com.braintrustappliedresearch</groupId>
+        <artifactId>spring-boot-business-rules</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.kie</groupId>
+        <artifactId>kie-dmn-core</artifactId>
+        <version>${kie.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <plugins>
+      <!-- javac: every lint category on, and any warning fails the build.
+           -processing is excluded: Spring's configuration processor is on the classpath and javac otherwise
+           warns that "no processor claimed" the annotations it saw. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <showWarnings>true</showWarnings>
+          <compilerArgs>
+            <arg>-Xlint:all,-processing</arg>
+            <!-- Javadoc checks at compile time: missing or malformed comments on public/protected API -->
+            <arg>-Xdoclint:all/protected</arg>
+            <arg>-Werror</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
+    </plugins>
+    <pluginManagement>
+      <plugins>
+        <!-- IDE-only (Eclipse m2e, used by VS Code's Java extension): tells m2e to skip Checkstyle inside the IDE
+             instead of reporting "Plugin execution not covered by lifecycle configuration". Maven itself ignores
+             this entry: it is in pluginManagement, so the plugin is never resolved. Checkstyle still runs in
+             `mvn verify`, CI and the pre-commit hook. -->
+        <plugin>
+          <groupId>org.eclipse.m2e</groupId>
+          <artifactId>lifecycle-mapping</artifactId>
+          <version>1.0.0</version>
+          <configuration>
+            <lifecycleMappingMetadata>
+              <pluginExecutions>
+                <pluginExecution>
+                  <pluginExecutionFilter>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-checkstyle-plugin</artifactId>
+                    <versionRange>[3.0.0,)</versionRange>
+                    <goals>
+                      <goal>check</goal>
+                    </goals>
+                  </pluginExecutionFilter>
+                  <action>
+                    <ignore/>
+                  </action>
+                </pluginExecution>
+              </pluginExecutions>
+            </lifecycleMappingMetadata>
+          </configuration>
+        </plugin>
+        <!-- Style rules in config/checkstyle.xml; enabled per module -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-checkstyle-plugin</artifactId>
+          <version>${checkstyle.plugin.version}</version>
+          <dependencies>
+            <dependency>
+              <groupId>com.puppycrawl.tools</groupId>
+              <artifactId>checkstyle</artifactId>
+              <version>${checkstyle.version}</version>
+            </dependency>
+          </dependencies>
+          <configuration>
+            <configLocation>${checkstyle.config}</configLocation>
+            <includeTestSourceDirectory>true</includeTestSourceDirectory>
+            <consoleOutput>true</consoleOutput>
+            <violationSeverity>warning</violationSeverity>
+            <failOnViolation>true</failOnViolation>
+          </configuration>
+          <executions>
+            <execution>
+              <id>checkstyle</id>
+              <phase>validate</phase>
+              <goals>
+                <goal>check</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+        <!-- API docs. `mvn javadoc:javadoc` writes target/reports/apidocs; docs/build-site.sh publishes it to
+             GitHub Pages under /javadoc/. The `release` profile also attaches the javadoc jar. -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-javadoc-plugin</artifactId>
+          <configuration>
+            <release>${java.version}</release>
+            <doclint>all</doclint>
+            <failOnWarnings>true</failOnWarnings>
+            <doctitle>spring-boot-business-rules ${project.version}</doctitle>
+            <windowtitle>spring-boot-business-rules ${project.version} API</windowtitle>
+          </configuration>
+        </plugin>
+        <!-- Static bug analysis of the compiled classes; enabled per module -->
+        <plugin>
+          <groupId>com.github.spotbugs</groupId>
+          <artifactId>spotbugs-maven-plugin</artifactId>
+          <version>${spotbugs.plugin.version}</version>
+          <configuration>
+            <effort>Max</effort>
+            <threshold>Medium</threshold>
+            <failOnError>true</failOnError>
+          </configuration>
+          <executions>
+            <execution>
+              <id>spotbugs</id>
+              <phase>verify</phase>
+              <goals>
+                <goal>check</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+
+  <profiles>
+    <!-- Maven Central release: sources + javadoc jars, GPG signatures, Central Portal upload.
+         Credentials are never in this file: the Portal token comes from the `central` server entry
+         and the GPG key/passphrase from the environment (see .github/workflows/ci.yml). -->
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>attach-sources</id>
+                <goals><goal>jar-no-fork</goal></goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>attach-javadocs</id>
+                <goals><goal>jar</goal></goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>3.2.8</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals><goal>sign</goal></goals>
+                <configuration>
+                  <gpgArguments>
+                    <arg>--pinentry-mode</arg>
+                    <arg>loopback</arg>
+                  </gpgArguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>0.12.0</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <autoPublish>true</autoPublish>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>

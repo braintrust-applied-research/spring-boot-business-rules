@@ -1,0 +1,11 @@
+#!/bin/sh
+# Pre-commit gate: javac -Xlint:all -Werror, Checkstyle and SpotBugs (tests skipped for speed; CI runs them).
+# Enable once per clone:  git config core.hooksPath .githooks
+# Bypass in an emergency: git commit --no-verify
+set -e
+cd "$(git rev-parse --show-toplevel)"
+echo "pre-commit: mvn verify -DskipTests (compiler lint, Checkstyle, SpotBugs)..."
+if ! mvn -B -q verify -DskipTests; then
+    echo "pre-commit: checks failed; fix the findings above or commit with --no-verify." >&2
+    exit 1
+fi

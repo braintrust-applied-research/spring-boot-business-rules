@@ -1,0 +1,41 @@
+# Normalize line endings: LF in the repository AND in the working tree on every OS.
+# (Indentation is not a git concern; see .editorconfig.)
+* text=auto eol=lf
+
+# Explicitly text
+*.java      text eol=lf diff=java
+*.xml       text eol=lf
+*.dmn       text eol=lf
+*.md        text eol=lf diff=markdown
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.json      text eol=lf
+*.properties text eol=lf
+*.html      text eol=lf diff=html
+*.css       text eol=lf
+*.js        text eol=lf
+*.sh        text eol=lf
+*.imports   text eol=lf
+.gitignore      text eol=lf
+.gitattributes  text eol=lf
+.editorconfig   text eol=lf
+LICENSE     text eol=lf
+NOTICE      text eol=lf
+
+# Windows scripts are the one place CRLF is required
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+
+# Binary: never touch or diff as text
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.pdf       binary
+*.jar       binary
+*.war       binary
+*.zip       binary
+*.gz        binary
+*.woff      binary
+*.woff2     binary

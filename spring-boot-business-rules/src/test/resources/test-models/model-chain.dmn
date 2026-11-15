@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/"
+             id="model-chain" name="ModelChain" namespace="https://example.test/model-chain">
+
+  <inputData id="i_n" name="n"><variable id="v_n" name="n" typeRef="number"/></inputData>
+
+  <decision id="d_base" name="Base">
+    <variable id="v_base" name="Base" typeRef="number"/>
+    <informationRequirement id="ir_base"><requiredInput href="#i_n"/></informationRequirement>
+    <literalExpression id="le_base"><text>n * 2</text></literalExpression>
+  </decision>
+
+  <decision id="d_top" name="Top">
+    <variable id="v_top" name="Top" typeRef="number"/>
+    <informationRequirement id="ir_top"><requiredDecision href="#d_base"/></informationRequirement>
+    <literalExpression id="le_top"><text>Base + 1</text></literalExpression>
+  </decision>
+</definitions>
