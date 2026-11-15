@@ -8,6 +8,9 @@ info:
     The endpoint lives at `{server context-path}{spring-boot-business-rules.path}`. The paths below use the
     example app's configuration (`server.servlet.context-path=/api`,
     `spring-boot-business-rules.path=/business/rules`); change the server variable or path to match your app.
+
+    **The endpoint has no authentication of its own.** Protect it in the host application (for example with Spring
+    Security); see the README, "Securing the endpoint".
   license:
     name: Apache-2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.txt

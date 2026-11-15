@@ -36,6 +36,13 @@
       <artifactId>spring-boot-starter-webmvc-test</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- Test only: gives the tests the real SecurityFilterChain class so they can check the "Spring Security present"
+         and "absent" cases of UnprotectedEndpointWarning. It is not a dependency of the published library. -->
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-web</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>

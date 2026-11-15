@@ -6,9 +6,11 @@ import java.util.Arrays;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.support.ResourcePatternResolver;
 
 /**
@@ -26,6 +28,10 @@ import org.springframework.core.io.support.ResourcePatternResolver;
  * </ul>
  *
  * <p>Turn the whole thing off with {@code spring-boot-business-rules.enabled=false}.
+ *
+ * <p><strong>The endpoint is unauthenticated.</strong> The library adds no authentication, so protect it in the host
+ * application. When Spring Security is not on the classpath, a warning is logged at startup (see
+ * {@link UnprotectedEndpointWarning}).
  *
  * @see BusinessRulesProperties
  */
@@ -80,5 +86,19 @@ public class BusinessRulesAutoConfiguration {
     @ConditionalOnBooleanProperty(name = BusinessRulesProperties.PREFIX + ".instructions-enabled")
     RulesInstructionsController rulesInstructionsController(RulesEngine engine, BusinessRulesProperties properties) {
         return new RulesInstructionsController(engine, properties);
+    }
+
+    /**
+     * Registers the startup warning when Spring Security is absent. With Spring Security on the classpath, Spring Boot
+     * secures every endpoint by default, so nothing is registered.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnMissingClass("org.springframework.security.web.SecurityFilterChain")
+    static class UnprotectedEndpointWarningConfiguration {
+
+        @Bean
+        UnprotectedEndpointWarning unprotectedEndpointWarning(BusinessRulesProperties properties) {
+            return new UnprotectedEndpointWarning(properties.path());
+        }
     }
 }

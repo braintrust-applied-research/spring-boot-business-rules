@@ -80,6 +80,33 @@ Put `.dmn` files under `src/main/resources/rules/`. Configuration:
 
 With `server.servlet.context-path=/api` and `spring-boot-business-rules.path=/business/rules`, the endpoint is `/api/business/rules`.
 
+## Securing the endpoint
+
+**The endpoint has no authentication of its own.** Anyone who can reach your application can call `POST <path>`, and by
+trying inputs can work out your rules' thresholds. Protect it in the host application, like any API.
+
+- **No Spring Security on the classpath:** the endpoint is open, and the library logs a startup warning
+  (`UNAUTHENTICATED`) so this is not a surprise. If a gateway authenticates every request for you, silence it with
+  `logging.level.com.braintrustappliedresearch.businessrules.UnprotectedEndpointWarning=ERROR`.
+- **With `spring-boot-starter-security`:** Spring Boot blocks anonymous requests by default (they get `401`), but its
+  default setup gives API clients no way to log in, so define a `SecurityFilterChain`. This minimal example uses HTTP
+  Basic and was tested; use your real scheme (OAuth2, JWT, and so on) in production:
+
+  ```java
+  @Bean
+  SecurityFilterChain rulesSecurity(HttpSecurity http) throws Exception {
+      return http
+              .authorizeHttpRequests(a -> a.anyRequest().authenticated())
+              .httpBasic(Customizer.withDefaults())
+              .csrf(csrf -> csrf.disable())   // stateless API: no browser session, so no CSRF token
+              .build();
+  }
+  ```
+
+- **Also put in front of it:** rate limiting and a request-size limit (the library does not cap body size), and keep
+  `spring-boot-business-rules.instructions-enabled` off outside development.
+- **Turn it off** entirely with `spring-boot-business-rules.enabled=false`.
+
 ## API
 
 - `GET <path>` returns usage instructions, the effective `spring-boot-business-rules.*` settings, and the loaded

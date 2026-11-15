@@ -10,6 +10,9 @@
  * <p>Configuration lives under the {@code spring-boot-business-rules} prefix; see
  * {@link com.braintrustappliedresearch.businessrules.BusinessRulesProperties}.
  *
+ * <p><strong>The endpoint is unauthenticated</strong>: protect it in the host application. A warning is logged at startup
+ * when Spring Security is not on the classpath.
+ *
  * <p>A {@code GET} help route that lists the loaded models is available but <strong>off by default</strong>; enable it
  * with {@code spring-boot-business-rules.instructions-enabled=true} (see
  * {@link com.braintrustappliedresearch.businessrules.RulesInstructionsController}).
