@@ -106,8 +106,6 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-    env:
-      SNYK_VERSION: 1.1308.4   # pinned, like the other tool versions in this repo; bump deliberately
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Snyk resolves the Maven dependency tree with mvn
@@ -116,10 +114,16 @@ jobs:
           distribution: temurin
           java-version: 21
           cache: maven
-      # the Snyk CLI is run from npm
+      # The Snyk CLI is installed from ci/snyk/package-lock.json, not fetched with `npx`: `npm ci` checks every package,
+      # transitive ones included, against the integrity hashes in the lockfile, and --ignore-scripts runs no install
+      # script. This job runs with SNYK_TOKEN, so nothing unpinned may run in it. The CLI version is in
+      # ci/snyk/package.json; Dependabot bumps it with the lockfile.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
+      - name: Install the Snyk CLI from the lockfile
+        run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: ci/snyk
       - name: Require SNYK_TOKEN
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -135,7 +139,7 @@ jobs:
           # Exit codes: 0 = clean, 1 = vulnerabilities found (judged in the next step), anything else = Snyk
           # itself failed, which must fail the job (fail closed) and not be mistaken for a clean scan.
           status=0
-          npx --yes "snyk@${SNYK_VERSION}" test --all-projects --severity-threshold=medium --json > snyk-oss.json || status=$?
+          "$GITHUB_WORKSPACE/ci/snyk/node_modules/.bin/snyk" test --all-projects --severity-threshold=medium --json > snyk-oss.json || status=$?
           if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
             echo "::error::Snyk exited with status $status; the scan did not complete, so nothing will be published."
             head -c 2000 snyk-oss.json
@@ -172,7 +176,7 @@ jobs:
       - name: Snyk Code (source)
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: npx --yes "snyk@${SNYK_VERSION}" code test --severity-threshold=medium
+        run: '"$GITHUB_WORKSPACE/ci/snyk/node_modules/.bin/snyk" code test --severity-threshold=medium'
 
   # ------------------------------------------------------------- publish
   # Runs only for version tags (v1.2.3), after the tests AND the Snyk gate pass on the same commit.
