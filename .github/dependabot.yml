@@ -22,6 +22,20 @@ updates:
           - "minor"
           - "patch"
 
+  # The tools that build the docs site; Dependabot updates package.json and package-lock.json together.
+  - package-ecosystem: "npm"
+    directory: "/docs/tools"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      docs-tools:
+        patterns:
+          - "*"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

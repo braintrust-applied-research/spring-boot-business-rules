@@ -19,6 +19,7 @@ buildNumber.properties
 
 ### Generated documentation site (docs/build-site.sh)
 site/
+node_modules/
 
 ### MacOS
 **/.DS_Store
