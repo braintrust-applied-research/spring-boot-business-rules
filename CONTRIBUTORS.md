@@ -76,6 +76,10 @@ If a pull request is squash-merged, its title becomes the commit title, so use t
   integrity hashes in `docs/tools/package-lock.json` and runs no install scripts. Dependabot updates both files
   together; to bump a tool by hand, edit `package.json` and run `npm install --package-lock-only --ignore-scripts`
   in that folder.
+- **The Snyk CLI is locked too.** The release gate runs with `SNYK_TOKEN`, so the CLI is installed from
+  `ci/snyk/package.json` and `ci/snyk/package-lock.json` with `npm ci --ignore-scripts`, not fetched with `npx`. To bump
+  it, edit the version in `package.json` and run `npm install --package-lock-only --ignore-scripts` in `ci/snyk`
+  (Dependabot does this too). Run the gate by hand with `ci/snyk/node_modules/.bin/snyk`.
 - **Dependency security.** Dependencies are scanned with Snyk (`snyk test --all-projects`, plus `snyk code test` for the
   source), and the CI `snyk` job is a release gate: a version tag is not published to Maven Central if a dependency has a medium-or-higher finding (medium, high or critical) for which a fixed version exists, or if Snyk Code reports a medium-or-higher finding. Dependency findings with no published fix are listed but do not block
   (see the README's Pipeline section for the `SNYK_TOKEN` secret). Run the same two commands locally, with `--severity-threshold=medium`, before tagging. The gate reads `fixedIn` from `snyk test --json` and does not use `--fail-on`, which only counts issues fixable by upgrading a direct dependency and so passed critical transitive issues that did have fixes.

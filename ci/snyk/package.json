@@ -1,0 +1,8 @@
+{
+  "name": "spring-boot-business-rules-snyk-cli",
+  "private": true,
+  "description": "The Snyk CLI used by the release gate in .github/workflows/ci.yml. Installed with `npm ci --ignore-scripts`, so every package, including transitive ones, is checked against the integrity hashes in package-lock.json. The gate runs with SNYK_TOKEN, so nothing unpinned may run there.",
+  "devDependencies": {
+    "snyk": "1.1308.4"
+  }
+}
