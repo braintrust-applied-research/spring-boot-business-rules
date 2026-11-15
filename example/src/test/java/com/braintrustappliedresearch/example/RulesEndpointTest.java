@@ -170,6 +170,30 @@ class RulesEndpointTest {
     }
 
     @Test
+    void everyResponseCarriesTheDefensiveHeaders() throws Exception {
+        String url = "http://localhost:" + port + "/api/business/rules";
+        java.util.Map<String, HttpResponse<String>> responses = new java.util.LinkedHashMap<>();
+        responses.put("200 evaluation", post("{\"age\":30,\"income\":50000,\"evaluate\":\"Eligibility\"}"));
+        responses.put("400 over a limit", post("{\"evaluate\":\"" + "x".repeat(300) + "\"}"));
+        responses.put("404 unknown decision", post("{\"evaluate\":\"Nope\"}"));
+        responses.put("200 instructions", get("/api/business/rules"));
+        // produced by Spring before any controller runs
+        responses.put("405 wrong method", client.send(HttpRequest.newBuilder(URI.create(url))
+                .PUT(HttpRequest.BodyPublishers.ofString("{}")).header("Content-Type", "application/json").build(),
+                HttpResponse.BodyHandlers.ofString()));
+        responses.put("415 wrong content type", client.send(HttpRequest.newBuilder(URI.create(url))
+                .POST(HttpRequest.BodyPublishers.ofString("{}")).header("Content-Type", "text/plain").build(),
+                HttpResponse.BodyHandlers.ofString()));
+
+        responses.forEach((what, response) -> {
+            assertThat(response.headers().firstValue("X-Content-Type-Options")).as(what).contains("nosniff");
+            assertThat(response.headers().firstValue("Cache-Control")).as(what).contains("no-store");
+        });
+        assertThat(responses.get("405 wrong method").statusCode()).isEqualTo(405);
+        assertThat(responses.get("415 wrong content type").statusCode()).isEqualTo(415);
+    }
+
+    @Test
     void missingInputIsUnprocessable() throws Exception {
         assertThat(post("{\"age\":30,\"evaluate\":\"Eligibility\"}").statusCode()).isEqualTo(422);
     }

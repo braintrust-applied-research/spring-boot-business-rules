@@ -11,6 +11,8 @@ info:
 
     **The endpoint has no authentication of its own.** Protect it in the host application (for example with Spring
     Security); see the README, "Securing the endpoint".
+
+    Every response carries `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`.
   license:
     name: Apache-2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.txt

@@ -110,6 +110,9 @@ trying inputs can work out your rules' thresholds. Protect it in the host applic
   `spring-boot-business-rules.limits.*` properties, with safe defaults) and answers `400` beyond them, without repeating
   the offending text. It does **not** cap the request body as a whole, because Spring reads the body before the
   controller runs, so also set a body-size limit at your gateway or server.
+- **Response headers:** every response from the endpoint, errors included, carries `X-Content-Type-Options: nosniff`
+  and `Cache-Control: no-store` (a rule result describes one request and must not be cached). A header your
+  application or Spring Security already sets is left alone.
 - **Also put in front of it:** rate limiting, and keep `spring-boot-business-rules.instructions-enabled` off outside
   development.
 - **Turn it off** entirely with `spring-boot-business-rules.enabled=false`.

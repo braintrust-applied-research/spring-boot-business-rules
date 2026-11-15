@@ -8,6 +8,7 @@ import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.security.web.SecurityFilterChain;
 
@@ -92,5 +93,26 @@ class BusinessRulesAutoConfigurationTest {
                         "spring-boot-business-rules.limits.max-value-length=1234")
                 .run(context -> assertThat(context.getBean(BusinessRulesProperties.class).limits())
                         .isEqualTo(new BusinessRulesProperties.Limits(7, 30, 1234)));
+    }
+
+    @Test
+    void theResponseHeadersFilterCoversExactlyTheEndpointPath() {
+        runner.run(context -> {
+            FilterRegistrationBean<?> registration = (FilterRegistrationBean<?>) context.getBean("rulesResponseHeadersFilter");
+            assertThat(registration.getUrlPatterns()).containsExactly("/rules");
+        });
+    }
+
+    @Test
+    void theFilterPathFollowsTheConfiguredPathAndTheServletPrefix() {
+        runner.withPropertyValues("spring-boot-business-rules.path=business/rules", "spring.mvc.servlet.path=/svc/")
+                .run(context -> assertThat(((FilterRegistrationBean<?>) context.getBean("rulesResponseHeadersFilter"))
+                        .getUrlPatterns()).containsExactly("/svc/business/rules"));
+    }
+
+    @Test
+    void noFilterWhenTheEndpointIsDisabled() {
+        runner.withPropertyValues("spring-boot-business-rules.enabled=false")
+                .run(context -> assertThat(context).doesNotHaveBean("rulesResponseHeadersFilter"));
     }
 }

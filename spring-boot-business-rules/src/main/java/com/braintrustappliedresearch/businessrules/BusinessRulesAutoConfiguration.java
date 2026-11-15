@@ -2,6 +2,7 @@ package com.braintrustappliedresearch.businessrules;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
@@ -9,6 +10,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
@@ -73,6 +75,24 @@ public class BusinessRulesAutoConfiguration {
     @ConditionalOnMissingBean
     RulesController rulesController(RulesEngine engine, BusinessRulesProperties properties) {
         return new RulesController(engine, properties.instructionsEnabled(), properties.limits());
+    }
+
+    /**
+     * Adds {@code nosniff} and {@code no-store} headers to every response from the rules endpoint.
+     *
+     * @param properties  the bound {@code spring-boot-business-rules.*} configuration (for the endpoint path)
+     * @param environment read for {@code spring.mvc.servlet.path}, so the filter matches the real path
+     * @return the registration, which maps the filter to exactly the endpoint path
+     */
+    @Bean
+    @ConditionalOnMissingBean(name = "rulesResponseHeadersFilter")
+    FilterRegistrationBean<ResponseHeadersFilter> rulesResponseHeadersFilter(BusinessRulesProperties properties,
+            Environment environment) {
+        String path = properties.path().startsWith("/") ? properties.path() : "/" + properties.path();
+        FilterRegistrationBean<ResponseHeadersFilter> registration = new FilterRegistrationBean<>(
+                new ResponseHeadersFilter());
+        registration.setUrlPatterns(List.of(servletPrefix(environment) + path));
+        return registration;
     }
 
     /**
