@@ -88,8 +88,10 @@ paths:
                 $ref: '#/components/schemas/EvaluateResponse'
         '400':
           description: |
-            Missing `evaluate` key, a key that is not a declared input of the model, or `evaluate: all` was requested
-            without a `model` while several models are loaded
+            Missing `evaluate` key, a key that is not a declared input of the model, `evaluate: all` was requested
+            without a `model` while several models are loaded, `model` is not a string, or the request is over a limit
+            (too many inputs, or a name or text value that is too long; see the `spring-boot-business-rules.limits.*`
+            properties). The message names the rule without repeating the offending text.
           content:
             application/json:
               schema:
@@ -136,6 +138,12 @@ components:
               type: string
             spring-boot-business-rules.instructions-enabled:
               type: boolean
+            spring-boot-business-rules.limits.max-inputs:
+              type: integer
+            spring-boot-business-rules.limits.max-name-length:
+              type: integer
+            spring-boot-business-rules.limits.max-value-length:
+              type: integer
         models:
           type: array
           items:
@@ -168,8 +176,8 @@ components:
         model:
           type: string
           description: |
-            Optional model name, to disambiguate decisions with the same name across models. Required for
-            `evaluate: all` when more than one model is loaded.
+            Optional model name (it must be a string), to disambiguate decisions with the same name across models.
+            Required for `evaluate: all` when more than one model is loaded.
       additionalProperties: true
     EvaluateResponse:
       type: object

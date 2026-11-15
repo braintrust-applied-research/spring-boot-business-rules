@@ -71,7 +71,7 @@ public class BusinessRulesAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     RulesController rulesController(RulesEngine engine, BusinessRulesProperties properties) {
-        return new RulesController(engine, properties.instructionsEnabled());
+        return new RulesController(engine, properties.instructionsEnabled(), properties.limits());
     }
 
     /**

@@ -77,6 +77,9 @@ Put `.dmn` files under `src/main/resources/rules/`. Configuration:
 | `spring-boot-business-rules.rules-location` | `classpath*:rules/**/*.dmn` | Where to find DMN models |
 | `spring-boot-business-rules.enabled` | `true` | Turn the endpoint off |
 | `spring-boot-business-rules.instructions-enabled` | `false` | Let callers learn about the rules: serves `GET <path>` (usage help plus the loaded models, inputs and decisions), enables `"evaluate":"all"`, and returns detailed responses. **Off by default; opt in to use it** |
+| `spring-boot-business-rules.limits.max-inputs` | `500` | Most inputs one request may carry. A request over a limit gets `400` |
+| `spring-boot-business-rules.limits.max-name-length` | `256` | Longest `evaluate` or `model` value, input name, or name inside an input value (characters) |
+| `spring-boot-business-rules.limits.max-value-length` | `10000` | Longest single text value anywhere in the inputs, including inside lists and objects (characters) |
 
 With `server.servlet.context-path=/api` and `spring-boot-business-rules.path=/business/rules`, the endpoint is `/api/business/rules`.
 
@@ -103,8 +106,12 @@ trying inputs can work out your rules' thresholds. Protect it in the host applic
   }
   ```
 
-- **Also put in front of it:** rate limiting and a request-size limit (the library does not cap body size), and keep
-  `spring-boot-business-rules.instructions-enabled` off outside development.
+- **Request limits:** the library caps the number of inputs and the length of names and text values (the
+  `spring-boot-business-rules.limits.*` properties, with safe defaults) and answers `400` beyond them, without repeating
+  the offending text. It does **not** cap the request body as a whole, because Spring reads the body before the
+  controller runs, so also set a body-size limit at your gateway or server.
+- **Also put in front of it:** rate limiting, and keep `spring-boot-business-rules.instructions-enabled` off outside
+  development.
 - **Turn it off** entirely with `spring-boot-business-rules.enabled=false`.
 
 ## API
@@ -122,7 +129,8 @@ trying inputs can work out your rules' thresholds. Protect it in the host applic
   name of a decision, is rejected with `400`: a value supplied under a decision's name would otherwise replace that
   decision's result and let a caller bypass the rule.
   Use `"evaluate":"all"` to run every decision in a model in one call (see below).
-  Responses: `200` result, `400` missing `evaluate`, an unknown input, or an ambiguous `all`, `404` unknown decision,
+  Responses: `200` result, `400` missing `evaluate`, an unknown input, an ambiguous `all`, or a request over a limit
+  (`model` must be a string), `404` unknown decision,
   `422` nothing was decided (see below).
 
 **A `null` result is never a success.** A request that is well formed but cannot be decided gets `422`, not `200`: a

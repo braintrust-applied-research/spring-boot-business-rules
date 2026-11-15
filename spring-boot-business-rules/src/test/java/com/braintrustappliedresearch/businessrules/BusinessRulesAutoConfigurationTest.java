@@ -78,4 +78,19 @@ class BusinessRulesAutoConfigurationTest {
                     assertThat(output).doesNotContain("UNAUTHENTICATED");
                 });
     }
+
+    @Test
+    void limitsBindToTheSameDefaultsTheControllerUses() {
+        runner.run(context -> assertThat(context.getBean(BusinessRulesProperties.class).limits())
+                .isEqualTo(BusinessRulesProperties.Limits.defaults()));
+    }
+
+    @Test
+    void limitsCanBeConfigured() {
+        runner.withPropertyValues("spring-boot-business-rules.limits.max-inputs=7",
+                        "spring-boot-business-rules.limits.max-name-length=30",
+                        "spring-boot-business-rules.limits.max-value-length=1234")
+                .run(context -> assertThat(context.getBean(BusinessRulesProperties.class).limits())
+                        .isEqualTo(new BusinessRulesProperties.Limits(7, 30, 1234)));
+    }
 }

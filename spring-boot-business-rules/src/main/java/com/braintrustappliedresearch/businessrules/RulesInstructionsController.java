@@ -74,6 +74,9 @@ public class RulesInstructionsController {
         configuration.put(prefix + "path", properties.path());
         configuration.put(prefix + "rules-location", properties.rulesLocation());
         configuration.put(prefix + "instructions-enabled", properties.instructionsEnabled());
+        configuration.put(prefix + "limits.max-inputs", properties.limits().maxInputs());
+        configuration.put(prefix + "limits.max-name-length", properties.limits().maxNameLength());
+        configuration.put(prefix + "limits.max-value-length", properties.limits().maxValueLength());
         return configuration;
     }
 }

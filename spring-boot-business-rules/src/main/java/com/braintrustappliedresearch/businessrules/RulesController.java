@@ -38,8 +38,12 @@ public class RulesController {
     static final String QUIET_MESSAGE = "The evaluation reported a problem with the supplied inputs. Details are not shown "
             + "because " + BusinessRulesProperties.PREFIX + ".instructions-enabled is off.";
 
+    /** Most unknown input names listed in a 400 body; the rest are counted. */
+    private static final int MAX_LISTED = 10;
+
     private final RulesEngine engine;
     private final boolean instructionsEnabled;
+    private final RequestLimits limits;
 
     /**
      * Creates the controller.
@@ -52,8 +56,21 @@ public class RulesController {
      *                            messages, and error responses list the loaded models
      */
     public RulesController(RulesEngine engine, boolean instructionsEnabled) {
+        this(engine, instructionsEnabled, BusinessRulesProperties.Limits.defaults());
+    }
+
+    /**
+     * Creates the controller with explicit request limits.
+     *
+     * @param engine              the rules engine used to evaluate decisions
+     * @param instructionsEnabled see {@link #RulesController(RulesEngine, boolean)}
+     * @param limits              caps on the size of a request (see {@link BusinessRulesProperties.Limits}); a request
+     *                            over a cap is rejected with {@code 400}
+     */
+    public RulesController(RulesEngine engine, boolean instructionsEnabled, BusinessRulesProperties.Limits limits) {
         this.engine = engine;
         this.instructionsEnabled = instructionsEnabled;
+        this.limits = new RequestLimits(limits);
     }
 
     /**
@@ -75,7 +92,8 @@ public class RulesController {
      *   <li>{@code 200}: the decision result. With instructions enabled the body also names the model, lists every
      *       decision evaluated, and carries any DMN messages; with instructions off it names only the requested
      *       decision and carries at most one generic message</li>
-     *   <li>{@code 400}: the {@code evaluate} key is missing or not a non-blank string, {@code "all"} was
+     *   <li>{@code 400}: the request is over a limit (see {@link BusinessRulesProperties.Limits}) or {@code model}
+     *       is not a string; the {@code evaluate} key is missing or not a non-blank string, {@code "all"} was
      *       requested without a {@code model} while several models are loaded, or the body contains a key that is not
      *       a declared input of the model. The last rule matters for security: values supplied under a decision's name
      *       would otherwise replace that decision's result and bypass the rule</li>
@@ -98,13 +116,18 @@ public class RulesController {
         if (!(decision instanceof String decisionName) || decisionName.isBlank()) {
             return error(HttpStatus.BAD_REQUEST, "Missing required string key '" + EVALUATE + "'", null);
         }
-        String modelName = model == null ? null : model.toString();
+        String tooLarge = limits.violation(decisionName, model, inputs);
+        if (tooLarge != null) {
+            return error(HttpStatus.BAD_REQUEST, tooLarge, null);
+        }
+        String modelName = (String) model;   // violation() guaranteed it is a string or absent
         DMNModel target = engine.findModel(modelName, decisionName).orElse(null);
         if (target == null && ALL.equals(decisionName) && instructionsEnabled) {
             return evaluateAll(modelName, inputs);
         }
         if (target == null) {
-            return error(HttpStatus.NOT_FOUND, "No decision named '" + decisionName + "'", modelsForError());
+            return error(HttpStatus.NOT_FOUND, "No decision named '" + RequestLimits.shorten(decisionName) + "'",
+                    modelsForError());
         }
         List<String> unknown = engine.unknownInputs(target, inputs);
         if (!unknown.isEmpty()) {
@@ -116,7 +139,8 @@ public class RulesController {
     private ResponseEntity<Map<String, Object>> evaluateAll(String modelName, Map<String, Object> inputs) {
         List<DMNModel> candidates = engine.findModels(modelName);
         if (candidates.isEmpty()) {
-            String message = modelName == null ? "No models are loaded" : "No model named '" + modelName + "'";
+            String message = modelName == null ? "No models are loaded"
+                    : "No model named '" + RequestLimits.shorten(modelName) + "'";
             return error(HttpStatus.NOT_FOUND, message, modelsForError());
         }
         if (candidates.size() > 1) {
@@ -132,7 +156,13 @@ public class RulesController {
     }
 
     private ResponseEntity<Map<String, Object>> unknownInputs(List<String> unknown) {
-        return error(HttpStatus.BAD_REQUEST, "Unknown input(s): " + String.join(", ", unknown)
+        // Cap the list: every key of a large request can be unknown, and each one is caller-supplied text
+        int shown = Math.min(unknown.size(), MAX_LISTED);
+        String names = String.join(", ", unknown.subList(0, shown).stream().map(RequestLimits::shorten).toList());
+        if (unknown.size() > shown) {
+            names += " and " + (unknown.size() - shown) + " more";
+        }
+        return error(HttpStatus.BAD_REQUEST, "Unknown input(s): " + names
                 + ". Only the model's declared inputs may be supplied", modelsForError());
     }
 

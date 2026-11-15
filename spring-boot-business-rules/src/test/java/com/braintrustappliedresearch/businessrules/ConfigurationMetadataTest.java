@@ -29,7 +29,10 @@ class ConfigurationMetadataTest {
                 "\"name\": \"spring-boot-business-rules.enabled\"",
                 "\"name\": \"spring-boot-business-rules.path\"",
                 "\"name\": \"spring-boot-business-rules.rules-location\"",
-                "\"name\": \"spring-boot-business-rules.instructions-enabled\"");
+                "\"name\": \"spring-boot-business-rules.instructions-enabled\"",
+                "\"name\": \"spring-boot-business-rules.limits.max-inputs\"",
+                "\"name\": \"spring-boot-business-rules.limits.max-name-length\"",
+                "\"name\": \"spring-boot-business-rules.limits.max-value-length\"");
     }
 
     @Test

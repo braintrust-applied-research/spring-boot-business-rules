@@ -149,6 +149,25 @@ class RulesEndpointTest {
     }
 
     @Test
+    void oversizedRequestsAreRejectedWithoutBeingEchoed() throws Exception {
+        String manyKeys = "{\"evaluate\":\"Eligibility\"," + String.join(",",
+                java.util.stream.IntStream.range(0, 20_000).mapToObj(i -> "\"k" + i + "\":1").toList()) + "}";
+        HttpResponse<String> tooMany = post(manyKeys);
+        assertThat(tooMany.statusCode()).isEqualTo(400);
+        assertThat(tooMany.body()).contains("Too many inputs").hasSizeLessThan(300);
+
+        String longModel = "M".repeat(1024 * 1024);
+        HttpResponse<String> model = post("{\"evaluate\":\"all\",\"model\":\"" + longModel + "\"}");
+        assertThat(model.statusCode()).isEqualTo(400);
+        assertThat(model.body()).hasSizeLessThan(300).doesNotContain("MMMMMMMMMM");
+
+        String longValue = "A".repeat(20_000);
+        HttpResponse<String> value = post("{\"firstName\":\"" + longValue + "\",\"lastName\":\"x\",\"evaluate\":\"Greeting\"}");
+        assertThat(value.statusCode()).isEqualTo(400);
+        assertThat(value.body()).contains("'firstName'").hasSizeLessThan(300);
+    }
+
+    @Test
     void missingInputIsUnprocessable() throws Exception {
         assertThat(post("{\"age\":30,\"evaluate\":\"Eligibility\"}").statusCode()).isEqualTo(422);
     }
