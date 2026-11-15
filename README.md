@@ -80,6 +80,7 @@ Put `.dmn` files under `src/main/resources/rules/`. Configuration:
 | `spring-boot-business-rules.limits.max-inputs` | `500` | Most inputs one request may carry. A request over a limit gets `400` |
 | `spring-boot-business-rules.limits.max-name-length` | `256` | Longest `evaluate` or `model` value, input name, or name inside an input value (characters) |
 | `spring-boot-business-rules.limits.max-value-length` | `10000` | Longest single text value anywhere in the inputs, including inside lists and objects (characters) |
+| `spring-boot-business-rules.limits.max-body-bytes` | `1048576` | Largest request body (bytes). A larger one gets `413` and is read only up to this size, never held whole. Keep a body-size limit in front of the application as well |
 
 With `server.servlet.context-path=/api` and `spring-boot-business-rules.path=/business/rules`, the endpoint is `/api/business/rules`.
 
@@ -160,13 +161,14 @@ BOM instead of inheriting the parent, these properties have no effect and you mu
 - `POST <path>` takes a JSON body: every key except `evaluate` (and optional `model`) must be a declared DMN input of
   the model; `evaluate` names the decision to run. Dependent decisions are evaluated too. Any other key, including the
   name of a decision, is rejected with `400`: a value supplied under a decision's name would otherwise replace that
-  decision's result and let a caller bypass the rule. The body must be one JSON object with **no duplicate keys**, at any
-  depth: with the usual "last one wins" a gateway that checked the first `"age"` and this endpoint that used the last
-  would disagree about the request, so a duplicate (like an empty or malformed body) gets `400`.
+  decision's result and let a caller bypass the rule. The body must be one **UTF-8** JSON object with **no duplicate keys**, at
+  any depth: with the usual "last one wins" a gateway that checked the first `"age"` and this endpoint that used the last
+  would disagree about the request, and the same goes for a body in UTF-16 or UTF-32, which parsers can sniff but a
+  gateway reading UTF-8 cannot see into. So a duplicate or a non-UTF-8 body (like an empty or malformed one) gets `400`.
   Use `"evaluate":"all"` to run every decision in a model in one call (see below).
-  Responses: `200` result, `400` an empty, malformed or duplicate-key body, missing `evaluate`, an unknown input, an
-  ambiguous `all`, or a request over a limit (`model` must be a string), `404` unknown decision,
-  `422` nothing was decided (see below).
+  Responses: `200` result, `400` an empty, non-UTF-8, malformed or duplicate-key body, missing `evaluate`, an unknown
+  input, an ambiguous `all`, or a request over a limit (`model` must be a string), `404` unknown decision, `413` a
+  body over `limits.max-body-bytes`, `422` nothing was decided (see below).
 
 **A `null` result is never a success.** A request that is well formed but cannot be decided gets `422`, not `200`: a
 required input is missing, an input has the wrong type or is `null` (DMN only warns "no rule matched ... setting result to
@@ -431,7 +433,8 @@ that the `.editorconfig` expresses (4-space Java, 2-space XML/YAML, LF endings) 
 | Stage | Runs on | What it does |
 | --- | --- | --- |
 | `test` | every push and pull request | `mvn verify` (all tests) on Java 21 and 25 |
-| `docs` | push to `main`, after `test` | lints `docs/openapi.yaml`, generates the Javadoc, builds the README + Swagger UI + Javadoc site, deploys to GitHub Pages |
+| `docs-build` | push to `main`, after `test` | lints `docs/openapi.yaml`, generates the Javadoc, builds the README + Swagger UI + Javadoc site. Runs the npm and Maven tooling with a read-only token and no OIDC identity |
+| `docs` | after `docs-build` | deploys the site that `docs-build` produced to GitHub Pages. It holds the Pages permissions and runs no build tooling, so a compromised build dependency cannot deploy by itself |
 | `snyk` | `v*` tags, alongside `test`; or a manual run (Actions → CI → Run workflow), which never publishes | **release gate:** Snyk dependency scan (every module) and Snyk Code scan. Blocks on a dependency finding of medium severity or higher **that has a published fix** (findings with no fix yet are listed but do not block) and on any medium-or-higher Snyk Code finding |
 | `publish` | `v*` tags, after `test` **and** `snyk`, and your approval of the `maven-central` environment | sets the version from the tag, signs, uploads and validates the bundle on Maven Central. It does **not** release it: you click Publish in the Central Portal |
 
@@ -474,9 +477,9 @@ Also required:
 - **GitHub Pages**: Settings → Pages → Build and deployment → Source: *GitHub Actions*. **Do this before the first
   merge to `main`.** If the source is left on "Deploy from a branch", GitHub runs its own built-in "pages build and
   deployment" job, which builds `/docs` with Jekyll (and fails if the folder does not exist) instead of publishing the
-  site built by the `docs` stage. This is a repository setting, not something the workflow can change. The site is
+  site built by the `docs-build` and `docs` stages. This is a repository setting, not something the workflow can change. The site is
   served at `https://www.braintrustappliedresearch.com/spring-boot-business-rules/` (the organization's custom domain;
-  the `braintrust-applied-research.github.io` address redirects to it). The docs stage needs no secrets (it uses the
+  the `braintrust-applied-research.github.io` address redirects to it). The docs stages need no secrets (it uses the
   workflow's OIDC token).
 - **Central namespace**: the `com.braintrustappliedresearch` groupId must be verified on central.sonatype.com
   (Namespaces → add it, then publish the DNS TXT record the Portal gives you on `braintrustappliedresearch.com`).

@@ -90,11 +90,19 @@ paths:
                 $ref: '#/components/schemas/EvaluateResponse'
         '400':
           description: |
-            The body is empty, is not a JSON object, or has a duplicate key (at any depth), the `evaluate` key is missing,
+            The body is empty, is not UTF-8, is not a JSON object, or has a duplicate key (at any depth), the `evaluate` key is missing,
             a key is not a declared input of the model, `evaluate: all` was requested
             without a `model` while several models are loaded, `model` is not a string, or the request is over a limit
             (too many inputs, or a name or text value that is too long; see the `spring-boot-business-rules.limits.*`
             properties). The message names the rule without repeating the offending text.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: |
+            The request body is larger than `spring-boot-business-rules.limits.max-body-bytes` (default 1 MiB). The
+            body is read only up to that size, so an oversized one is refused without being held in memory.
           content:
             application/json:
               schema:
@@ -149,6 +157,8 @@ components:
             spring-boot-business-rules.limits.max-name-length:
               type: integer
             spring-boot-business-rules.limits.max-value-length:
+              type: integer
+            spring-boot-business-rules.limits.max-body-bytes:
               type: integer
         models:
           type: array

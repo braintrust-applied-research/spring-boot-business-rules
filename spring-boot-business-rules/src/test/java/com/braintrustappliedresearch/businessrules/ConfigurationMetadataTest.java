@@ -32,7 +32,8 @@ class ConfigurationMetadataTest {
                 "\"name\": \"spring-boot-business-rules.instructions-enabled\"",
                 "\"name\": \"spring-boot-business-rules.limits.max-inputs\"",
                 "\"name\": \"spring-boot-business-rules.limits.max-name-length\"",
-                "\"name\": \"spring-boot-business-rules.limits.max-value-length\"");
+                "\"name\": \"spring-boot-business-rules.limits.max-value-length\"",
+                "\"name\": \"spring-boot-business-rules.limits.max-body-bytes\"");
     }
 
     @Test

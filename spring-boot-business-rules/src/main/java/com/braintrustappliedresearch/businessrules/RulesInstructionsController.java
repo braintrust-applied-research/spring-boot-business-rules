@@ -92,6 +92,7 @@ public class RulesInstructionsController {
         configuration.put(prefix + "limits.max-inputs", properties.limits().maxInputs());
         configuration.put(prefix + "limits.max-name-length", properties.limits().maxNameLength());
         configuration.put(prefix + "limits.max-value-length", properties.limits().maxValueLength());
+        configuration.put(prefix + "limits.max-body-bytes", properties.limits().maxBodyBytes());
         return configuration;
     }
 }

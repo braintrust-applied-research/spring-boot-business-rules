@@ -90,9 +90,10 @@ class BusinessRulesAutoConfigurationTest {
     void limitsCanBeConfigured() {
         runner.withPropertyValues("spring-boot-business-rules.limits.max-inputs=7",
                         "spring-boot-business-rules.limits.max-name-length=30",
-                        "spring-boot-business-rules.limits.max-value-length=1234")
+                        "spring-boot-business-rules.limits.max-value-length=1234",
+                        "spring-boot-business-rules.limits.max-body-bytes=4096")
                 .run(context -> assertThat(context.getBean(BusinessRulesProperties.class).limits())
-                        .isEqualTo(new BusinessRulesProperties.Limits(7, 30, 1234)));
+                        .isEqualTo(new BusinessRulesProperties.Limits(7, 30, 1234, 4096)));
     }
 
     @Test

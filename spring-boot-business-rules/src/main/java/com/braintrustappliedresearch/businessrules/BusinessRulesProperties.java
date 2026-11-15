@@ -36,20 +36,22 @@ public record BusinessRulesProperties(
 
     /**
      * Caps on a request. A request over a cap is rejected with {@code 400} and a message that names the rule without
-     * repeating the offending content. These bound what the endpoint will parse into the engine and echo back; the
-     * size of the request body as a whole is not capped here, because Spring reads it before the controller runs, so
-     * put a body-size limit in front of the application too.
+     * repeating the offending content ({@code 413} for the body size). These bound what the endpoint will read, parse
+     * into the engine and echo back. The body is read with a cap, so an oversized one is refused without being
+     * buffered; a body-size limit in front of the application is still worthwhile.
      *
      * @param maxInputs      most inputs (JSON keys other than evaluate and model) one request may carry
      * @param maxNameLength  longest allowed evaluate value, model value, input name, or name inside an input value, in
      *                       characters
      * @param maxValueLength longest allowed single text value anywhere in the inputs, including inside lists and
      *                       objects, in characters
+     * @param maxBodyBytes   largest request body, in bytes; a larger one is rejected with 413 before it is parsed
      */
     public record Limits(
             @DefaultValue("500") int maxInputs,
             @DefaultValue("256") int maxNameLength,
-            @DefaultValue("10000") int maxValueLength) {
+            @DefaultValue("10000") int maxValueLength,
+            @DefaultValue("1048576") int maxBodyBytes) {
 
         /**
          * The default limits, the same values the properties bind to when nothing is configured.
@@ -57,7 +59,7 @@ public record BusinessRulesProperties(
          * @return the defaults
          */
         public static Limits defaults() {
-            return new Limits(500, 256, 10_000);
+            return new Limits(500, 256, 10_000, 1_048_576);
         }
     }
 }

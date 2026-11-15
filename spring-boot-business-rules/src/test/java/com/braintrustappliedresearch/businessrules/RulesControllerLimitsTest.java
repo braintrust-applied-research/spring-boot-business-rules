@@ -19,7 +19,7 @@ import org.springframework.http.ResponseEntity;
 class RulesControllerLimitsTest {
 
     /** Small limits so the tests stay small: 3 inputs, 10-character names, 20-character text values. */
-    private static final BusinessRulesProperties.Limits SMALL = new BusinessRulesProperties.Limits(3, 10, 20);
+    private static final BusinessRulesProperties.Limits SMALL = new BusinessRulesProperties.Limits(3, 10, 20, 1_048_576);
 
     private static RulesController controller(BusinessRulesProperties.Limits limits) {
         RulesEngine engine = new RulesEngine(List.of(new ClassPathResource("test-models/model-a.dmn")));
@@ -143,12 +143,12 @@ class RulesControllerLimitsTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(error(response)).isEqualTo("Too many inputs: at most 500 are accepted");
-        assertThat(BusinessRulesProperties.Limits.defaults()).isEqualTo(new BusinessRulesProperties.Limits(500, 256, 10_000));
+        assertThat(BusinessRulesProperties.Limits.defaults()).isEqualTo(new BusinessRulesProperties.Limits(500, 256, 10_000, 1_048_576));
     }
 
     @Test
     void echoedNamesAreShortenedAndTheUnknownListIsCapped() {
-        BusinessRulesProperties.Limits roomy = new BusinessRulesProperties.Limits(500, 256, 10_000);
+        BusinessRulesProperties.Limits roomy = new BusinessRulesProperties.Limits(500, 256, 10_000, 1_048_576);
         String longKey = "a".repeat(200);   // sorts before "unknown0...", so it is among the names that are listed
         Map<String, Object> request = request("evaluate", "Double", "x", 4, longKey, 1);
         for (int i = 0; i < 14; i++) {
