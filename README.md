@@ -349,7 +349,7 @@ that the `.editorconfig` expresses (4-space Java, 2-space XML/YAML, LF endings) 
 | --- | --- | --- |
 | `test` | every push and pull request | `mvn verify` (all tests) on Java 21 and 25 |
 | `docs` | push to `main`, after `test` | lints `docs/openapi.yaml`, generates the Javadoc, builds the README + Swagger UI + Javadoc site, deploys to GitHub Pages |
-| `snyk` | `v*` tags, alongside `test` | **release gate:** Snyk dependency scan (every module) and Snyk Code scan. Blocks on a dependency finding of medium severity or higher **that has a published fix** (findings with no fix yet are listed but do not block) and on any medium-or-higher Snyk Code finding |
+| `snyk` | `v*` tags, alongside `test`; or a manual run (Actions → CI → Run workflow), which never publishes | **release gate:** Snyk dependency scan (every module) and Snyk Code scan. Blocks on a dependency finding of medium severity or higher **that has a published fix** (findings with no fix yet are listed but do not block) and on any medium-or-higher Snyk Code finding |
 | `publish` | `v*` tags, after `test` **and** `snyk` | sets the version from the tag, signs, and uploads to Maven Central |
 
 Release: `git tag v1.0.0 && git push origin v1.0.0`. Nothing is published unless both `test` and `snyk` pass. CI cannot

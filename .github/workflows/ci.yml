@@ -5,6 +5,9 @@ on:
     branches: [main]
     tags: ['v*']
   pull_request:
+  # Manual run (Actions > CI > Run workflow). Runs `test` and the `snyk` gate so the gate can be exercised without
+  # tagging a release. It can never publish: `publish` and `docs` still require a tag push / a push to main.
+  workflow_dispatch:
 
 # Least privilege by default; jobs that need more declare it themselves.
 permissions:
@@ -75,7 +78,7 @@ jobs:
         uses: actions/deploy-pages@v5
 
   # --------------------------------------------------------------- snyk
-  # Release gate. Runs only for version tags, in parallel with `test`, and `publish` needs it. It blocks the
+  # Release gate. Runs for version tags (and on a manual run), in parallel with `test`, and `publish` needs it. It blocks the
   # release when:
   #   - a dependency has a finding of MEDIUM severity or higher (medium, high, critical) that HAS A FIX, meaning
   #     a fixed version has been published (Snyk's `fixedIn`). Findings with no published fix are listed but do
@@ -88,7 +91,7 @@ jobs:
   # Needs the SNYK_TOKEN repository secret. A missing token FAILS the job, so the gate cannot be skipped silently.
   snyk:
     name: Snyk security gate
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-24.04
     permissions:
       contents: read
