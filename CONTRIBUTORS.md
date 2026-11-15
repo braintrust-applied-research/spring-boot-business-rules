@@ -4,6 +4,8 @@ Contributions are welcome: bug fixes, new features, documentation, and example i
 
 This project was created quickly using AI, so careful review, tests and cleanups are especially appreciated.
 
+Found a security problem? Please report it privately; see [SECURITY.md](SECURITY.md). Do not open a public issue.
+
 ## Compatibility requirements
 
 Changes must support all of the following:
