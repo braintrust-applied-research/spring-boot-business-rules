@@ -197,7 +197,7 @@ jobs:
           mvn --batch-mode --no-transfer-progress \
             org.codehaus.mojo:versions-maven-plugin:2.18.0:set \
             -DnewVersion="$version" -DgenerateBackupPoms=false
-      - name: Sign and publish
+      - name: Sign, upload and validate (a maintainer then clicks Publish in the Central Portal)
         # Tests already passed in the `test` job for this commit, so they are skipped here.
         run: mvn --batch-mode --no-transfer-progress -Prelease -DskipTests deploy
         env:

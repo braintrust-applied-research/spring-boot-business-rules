@@ -398,9 +398,12 @@ that the `.editorconfig` expresses (4-space Java, 2-space XML/YAML, LF endings) 
 | `test` | every push and pull request | `mvn verify` (all tests) on Java 21 and 25 |
 | `docs` | push to `main`, after `test` | lints `docs/openapi.yaml`, generates the Javadoc, builds the README + Swagger UI + Javadoc site, deploys to GitHub Pages |
 | `snyk` | `v*` tags, alongside `test`; or a manual run (Actions → CI → Run workflow), which never publishes | **release gate:** Snyk dependency scan (every module) and Snyk Code scan. Blocks on a dependency finding of medium severity or higher **that has a published fix** (findings with no fix yet are listed but do not block) and on any medium-or-higher Snyk Code finding |
-| `publish` | `v*` tags, after `test` **and** `snyk` | sets the version from the tag, signs, and uploads to Maven Central |
+| `publish` | `v*` tags, after `test` **and** `snyk`, and your approval of the `maven-central` environment | sets the version from the tag, signs, uploads and validates the bundle on Maven Central. It does **not** release it: you click Publish in the Central Portal |
 
-Release: `git tag v1.0.0 && git push origin v1.0.0`. Nothing is published unless both `test` and `snyk` pass. CI cannot
+Release: `git tag v1.0.0 && git push origin v1.0.0`, approve the `publish` job when GitHub asks (**Review
+deployments**), then open https://central.sonatype.com/publishing/deployments, check the validated deployment, and click
+**Publish** (or **Drop** to discard it). A Central release is permanent, so the pipeline stops short of it on purpose
+(`autoPublish` is `false` in `pom.xml`). Nothing is uploaded unless both `test` and `snyk` pass. CI cannot
 stop a tag from being pushed (it already exists when the workflow starts), but a tag that fails the gate publishes
 nothing. If it fails, fix the problem on `main`, delete the tag (`git tag -d v1.0.0 && git push --delete origin v1.0.0`),
 and tag again. To control who may create release tags at all, add a repository tag ruleset for `v*` (Settings → Rules).

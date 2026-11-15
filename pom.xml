@@ -249,7 +249,10 @@
             <extensions>true</extensions>
             <configuration>
               <publishingServerId>central</publishingServerId>
-              <autoPublish>true</autoPublish>
+              <!-- false: the bundle is uploaded and validated, then waits in the Central Portal until a maintainer
+                   clicks Publish. A Central release is permanent, so this is a second, human check after the
+                   pipeline's own gates (tests, Snyk, and the maven-central environment approval). -->
+              <autoPublish>false</autoPublish>
             </configuration>
           </plugin>
         </plugins>
