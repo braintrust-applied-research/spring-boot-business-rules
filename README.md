@@ -23,7 +23,7 @@ ruleset, `customer-rules.dmn`, in the KIE DMN editor for VS Code:
 
 Ovals are the inputs you send in the request and rectangles are decisions. `Offer` needs `Greeting`, `Eligibility` and
 `zipCode`, so asking for `Offer` evaluates the decisions it depends on too (or send `"evaluate":"all"` to get every
-decision at once). `Greeting` and `Offer` are short expressions, and `Eligibility` is a decision table. Here is that
+decision at once, when instructions are enabled as in the example). `Greeting` and `Offer` are short expressions, and `Eligibility` is a decision table. Here is that
 table:
 
 ![The Eligibility decision table in the KIE DMN editor: four rules over age and income that give Declined, Approved, Referred or Declined](docs/images/eligibility-decision-table.png)
@@ -76,7 +76,7 @@ Put `.dmn` files under `src/main/resources/rules/`. Configuration:
 | `spring-boot-business-rules.path` | `/rules` | Endpoint path, **appended to** `server.servlet.context-path` (and any `spring.mvc.servlet.path`) |
 | `spring-boot-business-rules.rules-location` | `classpath*:rules/**/*.dmn` | Where to find DMN models |
 | `spring-boot-business-rules.enabled` | `true` | Turn the endpoint off |
-| `spring-boot-business-rules.instructions-enabled` | `false` | Serve `GET <path>` (usage help plus the loaded models, inputs and decisions). **Off by default; opt in to use it** |
+| `spring-boot-business-rules.instructions-enabled` | `false` | Let callers learn about the rules: serves `GET <path>` (usage help plus the loaded models, inputs and decisions), enables `"evaluate":"all"`, and returns detailed responses. **Off by default; opt in to use it** |
 
 With `server.servlet.context-path=/api` and `spring-boot-business-rules.path=/business/rules`, the endpoint is `/api/business/rules`.
 
@@ -112,8 +112,11 @@ trying inputs can work out your rules' thresholds. Protect it in the host applic
 - `GET <path>` returns usage instructions, the effective `spring-boot-business-rules.*` settings, and the loaded
   models with their inputs and decisions. **It is disabled by default** because it reveals the shape of your rules
   and where they are loaded from. Set `spring-boot-business-rules.instructions-enabled=true` to
-  turn it on. When it is off, a `GET` gets `405 Method Not Allowed` (only `POST` exists), and a `404` from `POST` does
-  not list the models either.
+  turn it on. When it is off the responses to `POST` are **quiet** too, so a caller cannot map your rules through
+  ordinary requests: a `GET` gets `405 Method Not Allowed` (only `POST` exists); a response names only the decision that
+  was asked for (no other decisions, no model name); DMN's messages, which name inputs, decisions and DMN ids, are
+  replaced by one generic message (the details still reach your server logs); `"evaluate":"all"` is an unknown decision
+  (`404`); and error bodies do not list the models.
 - `POST <path>` takes a JSON body: every key except `evaluate` (and optional `model`) must be a declared DMN input of
   the model; `evaluate` names the decision to run. Dependent decisions are evaluated too. Any other key, including the
   name of a decision, is rejected with `400`: a value supplied under a decision's name would otherwise replace that
@@ -125,7 +128,9 @@ trying inputs can work out your rules' thresholds. Protect it in the host applic
 ### Evaluating every decision at once
 
 Instead of calling `Greeting`, `Eligibility` and `Offer` one by one, send the reserved value `"evaluate":"all"`. It runs
-every decision in the model and returns them all:
+every decision in the model and returns them all. **It needs `spring-boot-business-rules.instructions-enabled=true`**
+(the example app sets it), because it exists to list the model's decisions; with instructions off it is an unknown
+decision and returns `404`:
 
 ```sh
 curl -X POST localhost:8080/api/business/rules -H 'Content-Type: application/json' \

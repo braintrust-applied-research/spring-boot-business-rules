@@ -14,10 +14,10 @@ import org.springframework.http.ResponseEntity;
 /** The reserved {@code "evaluate": "all"} value, which runs every decision in a model. */
 class RulesControllerAllTest {
 
-    private static RulesController controller(boolean listModelsInErrors, String... models) {
+    private static RulesController controller(boolean instructionsEnabled, String... models) {
         List<ClassPathResource> resources = java.util.Arrays.stream(models)
                 .map(m -> new ClassPathResource("test-models/" + m + ".dmn")).toList();
-        return new RulesController(new RulesEngine(List.copyOf(resources)), listModelsInErrors);
+        return new RulesController(new RulesEngine(List.copyOf(resources)), instructionsEnabled);
     }
 
     private static Map<String, Object> decisions(ResponseEntity<Map<String, Object>> response) {
@@ -93,7 +93,11 @@ class RulesControllerAllTest {
     void errorsRevealModelsOnlyWhenInstructionsAreEnabled() {
         Map<String, Object> request = Map.of("evaluate", "all", "x", 1);
 
+        // two models loaded and no "model" key: with instructions on this is a 400 that lists the models
         assertThat(controller(true, "model-a", "model-b").evaluate(request).getBody()).containsKey("models");
-        assertThat(controller(false, "model-a", "model-b").evaluate(request).getBody()).doesNotContainKey("models");
+        // with instructions off "all" does not exist at all, so nothing about the models can leak
+        ResponseEntity<Map<String, Object>> quiet = controller(false, "model-a", "model-b").evaluate(request);
+        assertThat(quiet.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(quiet.getBody()).doesNotContainKey("models");
     }
 }

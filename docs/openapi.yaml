@@ -53,7 +53,12 @@ paths:
 
         The reserved value `evaluate: all` runs **every** decision in a model and returns them all, in both `result`
         and `decisions`. When more than one model is loaded, also send `model`. A decision that is itself named
-        `all` takes precedence over the shortcut.
+        `all` takes precedence over the shortcut. It is only available when
+        `spring-boot-business-rules.instructions-enabled=true`; otherwise it is an unknown decision (`404`).
+
+        **Responses are quiet when instructions are off (the default).** `decisions` then holds only the requested
+        decision, `model` is omitted, and `messages` holds at most one generic message instead of DMN's text, which
+        names inputs, decisions and DMN ids.
       requestBody:
         required: true
         content:
@@ -87,8 +92,10 @@ paths:
                 $ref: '#/components/schemas/Error'
         '404':
           description: |
-            No decision with that name (or, for `evaluate: all`, no model with the given `model` name or no models
-            loaded). The body lists the loaded models only when `spring-boot-business-rules.instructions-enabled=true`.
+            No decision with that name (or, for `evaluate: all` with instructions enabled, no model with the given
+            `model` name or no models loaded). With instructions off, `evaluate: all` also returns this, as an
+            unknown decision. The body lists the loaded models only when
+            `spring-boot-business-rules.instructions-enabled=true`.
           content:
             application/json:
               schema:
@@ -164,16 +171,20 @@ components:
           type: string
         model:
           type: string
+          description: Name of the model. Omitted when instructions are off.
         result:
           description: |
             Result of the requested decision (any JSON value, possibly null). For `evaluate: all` this is the same
             object as `decisions`.
         decisions:
           type: object
-          description: Results of every decision evaluated, by name
+          description: |
+            Results of every decision evaluated, by name. When instructions are off, only the requested decision.
           additionalProperties: true
         messages:
           type: array
+          description: |
+            DMN's messages. When instructions are off, empty or one generic message that names nothing in the model.
           items:
             type: string
     Error:

@@ -16,9 +16,11 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param path          path of the rules endpoint, appended to the application's server context path
  *                      and any Spring MVC servlet path
  * @param rulesLocation Spring resource pattern used to find DMN (.dmn) models
- * @param instructionsEnabled whether the GET help route is served. It returns usage instructions, the effective settings
- *                      and the loaded models with their inputs and decisions, so it is off by default and must be opted
- *                      into; when off, only POST exists and error responses do not list the models
+ * @param instructionsEnabled whether callers may learn about the rules' structure. It serves the GET help route (usage,
+ *                      the effective settings, the loaded models with their inputs and decisions) and enables
+ *                      evaluate=all and detailed responses. Off by default; when off, only POST exists, responses name
+ *                      only the requested decision, DMN messages are replaced by a generic one, and evaluate=all is
+ *                      unavailable
  */
 @ConfigurationProperties(BusinessRulesProperties.PREFIX)
 public record BusinessRulesProperties(

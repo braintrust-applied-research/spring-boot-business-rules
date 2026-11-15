@@ -51,6 +51,32 @@ class InstructionsDisabledTest {
     }
 
     @Test
+    void aSuccessfulResponseRevealsNothingAboutTheModel() throws Exception {
+        HttpResponse<String> response = post("""
+                {"firstName":"A","lastName":"B","age":40,"income":50000,"zipCode":"10001","evaluate":"Eligibility"}""");
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("\"decisions\":{\"Eligibility\":\"Referred\"}");
+        assertThat(response.body()).doesNotContain("CustomerRules", "Offer", "Greeting");
+    }
+
+    @Test
+    void anErrorMessageNamesNeitherInputsNorDecisionsNorDmnIds() throws Exception {
+        HttpResponse<String> response = post("{\"evaluate\":\"Eligibility\"}");   // inputs missing
+        assertThat(response.statusCode()).isEqualTo(422);
+        assertThat(response.body()).doesNotContain("Required dependency", "'age'", "'income'", "d_eligibility",
+                "CustomerRules", "Offer", "Greeting");
+        assertThat(response.body()).contains("instructions-enabled");
+    }
+
+    @Test
+    void allIsNotAvailableWhenInstructionsAreOff() throws Exception {
+        HttpResponse<String> response = post("""
+                {"firstName":"A","lastName":"B","age":40,"income":50000,"zipCode":"10001","evaluate":"all"}""");
+        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(response.body()).doesNotContain("Eligibility", "Greeting", "Offer", "CustomerRules");
+    }
+
+    @Test
     void unknownDecisionDoesNotLeakModels() throws Exception {
         HttpResponse<String> response = post("{\"evaluate\":\"Nope\"}");
         assertThat(response.statusCode()).isEqualTo(404);

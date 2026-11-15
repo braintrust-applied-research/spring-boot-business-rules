@@ -1,5 +1,6 @@
 package com.braintrustappliedresearch.businessrules;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,12 @@ import org.springframework.web.bind.annotation.RestController;
  * Spring MVC resolves relative to the server context path and servlet path.
  *
  * <p>The {@code GET} help route is a separate, opt-in bean: see {@link RulesInstructionsController}.
+ *
+ * <p>Whether callers may learn about the rules' structure is decided by
+ * {@code spring-boot-business-rules.instructions-enabled}. When it is off, responses are <em>quiet</em>: they name only
+ * the decision that was asked for, leave out the model name, replace DMN's messages (which name inputs, decisions and
+ * DMN ids) with one generic message, and treat {@code "evaluate": "all"} as an unknown decision. Otherwise a caller
+ * could still map the model through ordinary responses even though the help route is off.
  */
 @RestController
 @RequestMapping("${" + BusinessRulesProperties.PREFIX + ".path:/rules}")
@@ -25,23 +32,28 @@ public class RulesController {
 
     static final String EVALUATE = "evaluate";
     static final String MODEL = "model";
-    /** Reserved {@code evaluate} value that runs every decision in a model. */
+    /** Reserved {@code evaluate} value that runs every decision in a model. Only available when instructions are on. */
     static final String ALL = "all";
+    /** Shown instead of DMN's own messages when instructions are off, so the response names nothing in the model. */
+    static final String QUIET_MESSAGE = "The evaluation reported a problem with the supplied inputs. Details are not shown "
+            + "because " + BusinessRulesProperties.PREFIX + ".instructions-enabled is off.";
 
     private final RulesEngine engine;
-    private final boolean listModelsInErrors;
+    private final boolean instructionsEnabled;
 
     /**
      * Creates the controller.
      *
-     * @param engine             the rules engine used to evaluate decisions
-     * @param listModelsInErrors whether a {@code 404} response lists the loaded models. Pass the value of
-     *                           {@code spring-boot-business-rules.instructions-enabled}: model names, inputs and decisions
-     *                           are only revealed to callers when the instructions route is deliberately enabled
+     * @param engine              the rules engine used to evaluate decisions
+     * @param instructionsEnabled whether callers may learn about the rules' structure. Pass the value of
+     *                            {@code spring-boot-business-rules.instructions-enabled}. When {@code false} responses
+     *                            are quiet (see the class description) and {@code "evaluate": "all"} is unavailable;
+     *                            when {@code true} responses include the model name, every evaluated decision and DMN's
+     *                            messages, and error responses list the loaded models
      */
-    public RulesController(RulesEngine engine, boolean listModelsInErrors) {
+    public RulesController(RulesEngine engine, boolean instructionsEnabled) {
         this.engine = engine;
-        this.listModelsInErrors = listModelsInErrors;
+        this.instructionsEnabled = instructionsEnabled;
     }
 
     /**
@@ -54,19 +66,23 @@ public class RulesController {
      *
      * <p>The reserved value {@code "evaluate": "all"} runs <em>every</em> decision in a model and returns them all,
      * so callers do not have to request each decision one by one. If more than one model is loaded, name the model
-     * with the {@code model} key. A model that defines a decision actually called {@code all} keeps that meaning:
-     * the real decision is evaluated and the shortcut does not apply.
+     * with the {@code model} key. It is only available when instructions are enabled, because it exists to list the
+     * model's decisions; otherwise it is an unknown decision ({@code 404}). A model that defines a decision actually
+     * called {@code all} keeps that meaning: the real decision is evaluated and the shortcut does not apply.
      *
      * <p>Responses:
      * <ul>
-     *   <li>{@code 200}: the decision result, plus every decision evaluated and any DMN messages</li>
+     *   <li>{@code 200}: the decision result. With instructions enabled the body also names the model, lists every
+     *       decision evaluated, and carries any DMN messages; with instructions off it names only the requested
+     *       decision and carries at most one generic message</li>
      *   <li>{@code 400}: the {@code evaluate} key is missing or not a non-blank string, {@code "all"} was
      *       requested without a {@code model} while several models are loaded, or the body contains a key that is not
      *       a declared input of the model. The last rule matters for security: values supplied under a decision's name
      *       would otherwise replace that decision's result and bypass the rule</li>
      *   <li>{@code 404}: no loaded model has a decision with that name, or the named {@code model} does not exist
      *       (the body lists the available models only if instructions are enabled)</li>
-     *   <li>{@code 422}: DMN reported errors, for example a required input was not supplied</li>
+     *   <li>{@code 422}: DMN reported errors, for example a required input was not supplied (the message is generic
+     *       when instructions are off)</li>
      * </ul>
      *
      * @param request the JSON body: rule inputs plus the {@code evaluate} key
@@ -82,7 +98,7 @@ public class RulesController {
         }
         String modelName = model == null ? null : model.toString();
         DMNModel target = engine.findModel(modelName, decisionName).orElse(null);
-        if (target == null && ALL.equals(decisionName)) {
+        if (target == null && ALL.equals(decisionName) && instructionsEnabled) {
             return evaluateAll(modelName, inputs);
         }
         if (target == null) {
@@ -121,17 +137,24 @@ public class RulesController {
     private ResponseEntity<Map<String, Object>> respond(String evaluated, RulesEngine.Evaluation evaluation) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put(EVALUATE, evaluated);
-        body.put(MODEL, evaluation.model());
-        body.put("result", evaluation.result());
-        body.put("decisions", evaluation.decisions());
-        body.put("messages", evaluation.messages());
+        if (instructionsEnabled) {
+            body.put(MODEL, evaluation.model());
+            body.put("result", evaluation.result());
+            body.put("decisions", evaluation.decisions());
+            body.put("messages", evaluation.messages());
+        } else {
+            // Quiet: say nothing about the model beyond what the caller asked for. singletonMap allows a null result.
+            body.put("result", evaluation.result());
+            body.put("decisions", Collections.singletonMap(evaluated, evaluation.result()));
+            body.put("messages", evaluation.messages().isEmpty() ? List.of() : List.of(QUIET_MESSAGE));
+        }
         return ResponseEntity.status(evaluation.hasErrors() ? HttpStatus.UNPROCESSABLE_CONTENT : HttpStatus.OK)
                 .body(body);
     }
 
     /** The loaded models, or {@code null} when the instructions route is off and models must not be revealed. */
     private List<Map<String, Object>> modelsForError() {
-        return listModelsInErrors ? engine.describe() : null;
+        return instructionsEnabled ? engine.describe() : null;
     }
 
     private static ResponseEntity<Map<String, Object>> error(HttpStatus status, String message, List<?> models) {

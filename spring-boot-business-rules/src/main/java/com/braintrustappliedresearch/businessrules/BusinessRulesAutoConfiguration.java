@@ -24,7 +24,8 @@ import org.springframework.core.io.support.ResourcePatternResolver;
  *   <li>a {@link RulesController}, served at {@link BusinessRulesProperties#path() spring-boot-business-rules.path}</li>
  *   <li>a {@link RulesInstructionsController} (the {@code GET} help route), <strong>only</strong> when
  *       {@link BusinessRulesProperties#instructionsEnabled() spring-boot-business-rules.instructions-enabled}
- *       is {@code true}; it is off by default</li>
+ *       is {@code true}; it is off by default. That property also decides how much a response reveals about the rules
+ *       (see {@link RulesController})</li>
  * </ul>
  *
  * <p>Turn the whole thing off with {@code spring-boot-business-rules.enabled=false}.
