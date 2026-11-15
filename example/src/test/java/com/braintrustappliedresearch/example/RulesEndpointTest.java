@@ -36,6 +36,8 @@ class RulesEndpointTest {
         HttpResponse<String> response = get("/api/business/rules");
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).contains("CustomerRules", "Eligibility", "firstName", "/api/business/rules");
+        // the usage text is built from configuration, so it never contains the address this request was sent to
+        assertThat(response.body()).contains("curl -X POST <base-url>/api/business/rules").doesNotContain("localhost");
     }
 
     @Test

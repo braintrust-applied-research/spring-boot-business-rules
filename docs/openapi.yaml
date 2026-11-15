@@ -124,6 +124,9 @@ components:
           type: string
         usage:
           type: object
+          description: |
+            Paths only (context path + endpoint path), built from configuration. The request's own URL, including its
+            `Host` header, is never repeated.
           additionalProperties:
             type: string
         configuration:

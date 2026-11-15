@@ -11,6 +11,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.core.io.support.ResourcePatternResolver;
 
 /**
@@ -78,15 +79,26 @@ public class BusinessRulesAutoConfiguration {
      * Exposes the opt-in {@code GET} help route. Absent unless
      * {@code spring-boot-business-rules.instructions-enabled=true}.
      *
-     * @param engine     the rules engine whose models are described
-     * @param properties the bound {@code spring-boot-business-rules.*} configuration, reported by the route
+     * @param engine      the rules engine whose models are described
+     * @param properties  the bound {@code spring-boot-business-rules.*} configuration, reported by the route
+     * @param environment read for {@code spring.mvc.servlet.path}, so the usage text shows the real path
      * @return the instructions controller, mapped at the same path as the rules controller
      */
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnBooleanProperty(name = BusinessRulesProperties.PREFIX + ".instructions-enabled")
-    RulesInstructionsController rulesInstructionsController(RulesEngine engine, BusinessRulesProperties properties) {
-        return new RulesInstructionsController(engine, properties);
+    RulesInstructionsController rulesInstructionsController(RulesEngine engine, BusinessRulesProperties properties,
+            Environment environment) {
+        return new RulesInstructionsController(engine, properties, servletPrefix(environment));
+    }
+
+    /** {@code spring.mvc.servlet.path} without a trailing slash; empty when the servlet is mapped at the root. */
+    static String servletPrefix(Environment environment) {
+        String path = environment.getProperty("spring.mvc.servlet.path", "");
+        while (path.endsWith("/")) {
+            path = path.substring(0, path.length() - 1);
+        }
+        return path.isEmpty() || path.startsWith("/") ? path : "/" + path;
     }
 
     /**
