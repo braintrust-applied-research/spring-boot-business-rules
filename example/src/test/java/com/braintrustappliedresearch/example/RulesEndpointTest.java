@@ -194,6 +194,26 @@ class RulesEndpointTest {
     }
 
     @Test
+    void duplicateKeysAreRejectedOverHttp() throws Exception {
+        // a gateway that checks the first "age" (10, a minor) and an app that used the last (40) would disagree
+        HttpResponse<String> response = post("{\"age\":10,\"age\":40,\"income\":50000,\"evaluate\":\"Eligibility\"}");
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(response.body()).isEqualTo("{\"error\":\"Duplicate keys are not allowed in the request body\"}");
+
+        HttpResponse<String> evaluate = post("{\"evaluate\":\"Greeting\",\"evaluate\":\"Offer\"}");
+        assertThat(evaluate.statusCode()).isEqualTo(400);
+    }
+
+    @Test
+    void malformedBodiesGetTheEndpointsOwnErrorShape() throws Exception {
+        HttpResponse<String> response = post("{\"evaluate\":");
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(response.body()).isEqualTo("{\"error\":\"The request body is not a valid JSON object\"}");
+        assertThat(response.headers().firstValue("X-Content-Type-Options")).contains("nosniff");
+        assertThat(post("").body()).isEqualTo("{\"error\":\"The request body is empty\"}");
+    }
+
+    @Test
     void missingInputIsUnprocessable() throws Exception {
         assertThat(post("{\"age\":30,\"evaluate\":\"Eligibility\"}").statusCode()).isEqualTo(422);
     }

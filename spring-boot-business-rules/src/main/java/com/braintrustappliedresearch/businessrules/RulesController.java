@@ -6,6 +6,10 @@ import java.util.List;
 import java.util.Map;
 
 import org.kie.dmn.api.core.DMNModel;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.StreamReadFeature;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -37,6 +41,17 @@ public class RulesController {
     /** Shown instead of DMN's own messages when instructions are off, so the response names nothing in the model. */
     static final String QUIET_MESSAGE = "The evaluation reported a problem with the supplied inputs. Details are not shown "
             + "because " + BusinessRulesProperties.PREFIX + ".instructions-enabled is off.";
+
+    /**
+     * Parses the request body. Duplicate keys are an error here ({@code STRICT_DUPLICATE_DETECTION}): with the default
+     * behaviour the last one silently wins, so a gateway that validated the first {@code "age"} and an application that
+     * used the second would disagree about the request. This mapper is private to the endpoint on purpose, so it does
+     * not change how the host application's own mapper reads anything else.
+     */
+    private static final JsonMapper STRICT_JSON = JsonMapper.builder()
+            .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+            .build();
+    private static final TypeReference<Map<String, Object>> REQUEST_TYPE = new TypeReference<>() { };
 
     /** Most unknown input names listed in a 400 body; the rest are counted. */
     private static final int MAX_LISTED = 10;
@@ -105,11 +120,37 @@ public class RulesController {
      *       instructions are off)</li>
      * </ul>
      *
-     * @param request the JSON body: rule inputs plus the {@code evaluate} key
+     * <p>The body must be one JSON object with <strong>no duplicate keys</strong>, at any depth. A body that is empty,
+     * not valid JSON, not an object, or has a duplicate key gets a {@code 400} in the same {@code {"error": ...}}
+     * shape as every other error here; the message never repeats the body.
+     *
+     * @param body the raw JSON body: rule inputs plus the {@code evaluate} key
      * @return the response body and status described above
      */
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<Map<String, Object>> evaluate(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<Map<String, Object>> post(@RequestBody(required = false) byte[] body) {
+        if (body == null || body.length == 0) {
+            return error(HttpStatus.BAD_REQUEST, "The request body is empty", null);
+        }
+        Map<String, Object> request;
+        try {
+            request = STRICT_JSON.readValue(body, REQUEST_TYPE);
+        } catch (JacksonException e) {
+            boolean duplicate = e.getOriginalMessage() != null && e.getOriginalMessage().startsWith("Duplicate");
+            return error(HttpStatus.BAD_REQUEST, duplicate ? "Duplicate keys are not allowed in the request body"
+                    : "The request body is not a valid JSON object", null);
+        }
+        return evaluate(request);
+    }
+
+    /**
+     * Evaluates an already-parsed request: the same rules as {@link #post}, minus reading the JSON. Calling this
+     * directly bypasses the duplicate-key check, which can only be made while the JSON is being read.
+     *
+     * @param request the parsed body: rule inputs plus the {@code evaluate} key
+     * @return the response body and status described for {@link #post}
+     */
+    public ResponseEntity<Map<String, Object>> evaluate(Map<String, Object> request) {
         Map<String, Object> inputs = new LinkedHashMap<>(request);
         Object decision = inputs.remove(EVALUATE);
         Object model = inputs.remove(MODEL);

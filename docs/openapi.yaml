@@ -90,7 +90,8 @@ paths:
                 $ref: '#/components/schemas/EvaluateResponse'
         '400':
           description: |
-            Missing `evaluate` key, a key that is not a declared input of the model, `evaluate: all` was requested
+            The body is empty, is not a JSON object, or has a duplicate key (at any depth), the `evaluate` key is missing,
+            a key is not a declared input of the model, `evaluate: all` was requested
             without a `model` while several models are loaded, `model` is not a string, or the request is over a limit
             (too many inputs, or a name or text value that is too long; see the `spring-boot-business-rules.limits.*`
             properties). The message names the rule without repeating the offending text.

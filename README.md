@@ -160,10 +160,12 @@ BOM instead of inheriting the parent, these properties have no effect and you mu
 - `POST <path>` takes a JSON body: every key except `evaluate` (and optional `model`) must be a declared DMN input of
   the model; `evaluate` names the decision to run. Dependent decisions are evaluated too. Any other key, including the
   name of a decision, is rejected with `400`: a value supplied under a decision's name would otherwise replace that
-  decision's result and let a caller bypass the rule.
+  decision's result and let a caller bypass the rule. The body must be one JSON object with **no duplicate keys**, at any
+  depth: with the usual "last one wins" a gateway that checked the first `"age"` and this endpoint that used the last
+  would disagree about the request, so a duplicate (like an empty or malformed body) gets `400`.
   Use `"evaluate":"all"` to run every decision in a model in one call (see below).
-  Responses: `200` result, `400` missing `evaluate`, an unknown input, an ambiguous `all`, or a request over a limit
-  (`model` must be a string), `404` unknown decision,
+  Responses: `200` result, `400` an empty, malformed or duplicate-key body, missing `evaluate`, an unknown input, an
+  ambiguous `all`, or a request over a limit (`model` must be a string), `404` unknown decision,
   `422` nothing was decided (see below).
 
 **A `null` result is never a success.** A request that is well formed but cannot be decided gets `422`, not `200`: a
