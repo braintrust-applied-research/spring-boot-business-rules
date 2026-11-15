@@ -202,6 +202,10 @@
          and the GPG key/passphrase from the environment (see .github/workflows/ci.yml). -->
     <profile>
       <id>release</id>
+      <properties>
+        <!-- Only the library module produces an SBOM: not this parent POM, and not the unpublished example -->
+        <cyclonedx.skip>true</cyclonedx.skip>
+      </properties>
       <build>
         <plugins>
           <plugin>
@@ -221,6 +225,32 @@
               <execution>
                 <id>attach-javadocs</id>
                 <goals><goal>jar</goal></goals>
+              </execution>
+            </executions>
+          </plugin>
+          <!-- Software bill of materials (CycloneDX JSON) for the published library. It is attached to the build, so it is
+               signed and deployed to Maven Central next to the jar (classifier "cyclonedx").
+               Spring Boot's parent also manages this plugin, with an execution meant for applications: it would write an
+               "application" SBOM into the jar. That execution (id "default") is switched off here. Only the library
+               module produces an SBOM (cyclonedx.skip is true here and false in its pom). -->
+          <plugin>
+            <groupId>org.cyclonedx</groupId>
+            <artifactId>cyclonedx-maven-plugin</artifactId>
+            <version>2.9.3</version>
+            <executions>
+              <execution>
+                <id>default</id>
+                <phase>none</phase>
+              </execution>
+              <execution>
+                <id>make-sbom</id>
+                <phase>package</phase>
+                <goals><goal>makeBom</goal></goals>
+                <configuration>
+                  <projectType>library</projectType>
+                  <outputFormat>json</outputFormat>
+                  <includeTestScope>false</includeTestScope>
+                </configuration>
               </execution>
             </executions>
           </plugin>

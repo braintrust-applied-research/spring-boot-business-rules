@@ -403,7 +403,9 @@ that the `.editorconfig` expresses (4-space Java, 2-space XML/YAML, LF endings) 
 Release: `git tag v1.0.0 && git push origin v1.0.0`, approve the `publish` job when GitHub asks (**Review
 deployments**), then open https://central.sonatype.com/publishing/deployments, check the validated deployment, and click
 **Publish** (or **Drop** to discard it). A Central release is permanent, so the pipeline stops short of it on purpose
-(`autoPublish` is `false` in `pom.xml`). Nothing is uploaded unless both `test` and `snyk` pass. CI cannot
+(`autoPublish` is `false` in `pom.xml`). Nothing is uploaded unless both `test` and `snyk` pass. Each release also
+ships a CycloneDX software bill of materials, `spring-boot-business-rules-<version>-cyclonedx.json`, next to the jar
+(generated in the `release` profile, so it is signed and deployed with the rest). CI cannot
 stop a tag from being pushed (it already exists when the workflow starts), but a tag that fails the gate publishes
 nothing. If it fails, fix the problem on `main`, delete the tag (`git tag -d v1.0.0 && git push --delete origin v1.0.0`),
 and tag again. To control who may create release tags at all, add a repository tag ruleset for `v*` (Settings → Rules).
