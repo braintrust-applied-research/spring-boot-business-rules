@@ -32,7 +32,7 @@ jobs:
           java-version: ${{ matrix.java }}
           cache: maven
       - name: Build and run all tests
-        run: mvn --batch-mode --no-transfer-progress verify
+        run: ./mvnw --batch-mode --no-transfer-progress verify
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -211,12 +211,12 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           version="${TAG#v}"
-          mvn --batch-mode --no-transfer-progress \
+          ./mvnw --batch-mode --no-transfer-progress \
             org.codehaus.mojo:versions-maven-plugin:2.18.0:set \
             -DnewVersion="$version" -DgenerateBackupPoms=false
       - name: Sign, upload and validate (a maintainer then clicks Publish in the Central Portal)
         # Tests already passed in the `test` job for this commit, so they are skipped here.
-        run: mvn --batch-mode --no-transfer-progress -Prelease -DskipTests deploy
+        run: ./mvnw --batch-mode --no-transfer-progress -Prelease -DskipTests deploy
         env:
           CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}

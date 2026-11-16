@@ -22,7 +22,7 @@ tools=docs/tools
 "$tools/node_modules/.bin/redocly" lint docs/openapi.yaml
 
 # Javadoc is generated from the source comments (doclint is strict: any warning fails), not committed.
-mvn --batch-mode --no-transfer-progress -pl spring-boot-business-rules javadoc:javadoc
+./mvnw --batch-mode --no-transfer-progress -pl spring-boot-business-rules javadoc:javadoc
 mkdir -p site/javadoc
 cp -R spring-boot-business-rules/target/reports/apidocs/. site/javadoc/
 
