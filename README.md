@@ -1,21 +1,69 @@
 # spring-boot-business-rules
 
-Opinionated repository to connect DSL-based business rules to Spring Boot 4.0.9+.
+Opinionated repository to connect business rules written in a domain-specific language (DSL) to Spring Boot 4.0.9+.
 
-Drop in the `spring-boot-business-rules` artifact and a [DMN](https://www.omg.org/spec/DMN) rules engine
-(KIE / Drools 10.x) is exposed over REST. No code required.
+Drop in the `spring-boot-business-rules` artifact and a
+[Decision Model and Notation (DMN)](https://www.omg.org/spec/DMN) rules engine, from
+[Apache KIE](https://kie.apache.org/) (Knowledge Is Everything; this project uses its Drools 10.x engine), is exposed
+over a Representational State Transfer (REST) application programming interface (API) that exchanges JavaScript Object
+Notation (JSON). No code required. See [What is KIE?](#what-is-kie) below.
 
-> **Note:** this project was created quickly using AI. It scratches an itch for people who want an opinionated way
-> to bring [KIE](https://kie.apache.org/) and its DSL business rule language (DMN) into Spring Boot. Review it
-> before relying on it, and contributions are welcome.
+> **Note:** this project was created quickly leveraging artificial intelligence (AI). It scratches an itch for people who
+> want an opinionated way to bring [KIE](https://kie.apache.org/) and its DSL business rule language (DMN) into Spring
+> Boot. Review it before relying on it, and contributions are welcome.
 
 **Docs:** https://www.braintrustappliedresearch.com/spring-boot-business-rules/ ·
-[API reference (Swagger UI)](https://www.braintrustappliedresearch.com/spring-boot-business-rules/api/) ·
+[API reference (Swagger UI, the user interface, or UI)](https://www.braintrustappliedresearch.com/spring-boot-business-rules/api/) ·
 [Javadoc](https://www.braintrustappliedresearch.com/spring-boot-business-rules/javadoc/)
+
+## Table of contents
+
+- [What is KIE?](#what-is-kie)
+- [Rules as decision tables](#rules-as-decision-tables)
+- [Layout](#layout)
+- [Using the artifact](#using-the-artifact)
+- [Securing the endpoint](#securing-the-endpoint)
+- [Dependency versions](#dependency-versions)
+- [API](#api)
+  - [Evaluating every decision at once](#evaluating-every-decision-at-once)
+- [Running the example API](#running-the-example-api)
+- [Adding a rule and testing it](#adding-a-rule-and-testing-it)
+  - [1. Create the model](#1-create-the-model)
+  - [2. Try it by hand](#2-try-it-by-hand)
+  - [3. Add an automated test](#3-add-an-automated-test)
+- [Code quality checks](#code-quality-checks)
+- [Pipeline](#pipeline)
+  - [Secrets and one-time setup](#secrets-and-one-time-setup)
+- [FAQ](#faq)
+- [License](#license)
+
+## What is KIE?
+
+[Apache KIE](https://kie.apache.org/) (Knowledge Is Everything) is an open source Apache Software Foundation project
+that groups tools for automating business logic outside of application code. The part this repository uses is
+[**Drools**](https://drools.org/), a long-established open source business rules engine written in Java. Drools
+evaluates rules against the data you give it and returns the outcome. It supports its own rule language (DRL, the Drools
+Rule Language) and runs DMN models, an industry-standard notation for decisions, through its DMN runtime, which is the
+part this project exposes. Drools started as a standalone project, later joined the Red Hat-sponsored KIE family, and
+is now developed under Apache KIE. KIE also covers workflow automation ([jBPM](https://www.jbpm.org/)) and has editors
+for authoring the models.
+
+**The business proposition** is to separate *what the business decides* from *the program that runs it*:
+
+- **Rules live as data, not code.** A pricing, eligibility or routing policy is a model (a decision table or a short
+  expression) that the people who own the policy can read and review, instead of conditionals scattered through Java.
+- **One standard format.** DMN is an open specification from the Object Management Group (OMG), so models are not locked to one
+  vendor's editor or engine, and any DMN-compliant tool can open them.
+- **Change policy without rewriting logic.** A rule change is an edit to a row in a table. It still goes through review
+  and testing, but it does not require restructuring control flow.
+- **Auditable decisions.** Every decision has a defined inputs-to-outputs shape, so you can say exactly which inputs
+  produced a result.
+
+This repository does not change what KIE is; it is the glue that makes it quick to use from Spring Boot.
 
 ## Rules as decision tables
 
-Business rules here are [DMN](https://www.omg.org/spec/DMN) models: a diagram of how decisions depend on each other,
+Business rules here are DMN models: a diagram of how decisions depend on each other,
 where each decision is a small expression or a decision table you read like a spreadsheet. This is the example app's
 ruleset, `customer-rules.dmn`, in the KIE DMN editor for VS Code:
 
@@ -93,17 +141,31 @@ trying inputs can work out your rules' thresholds. Protect it in the host applic
   (`UNAUTHENTICATED`) so this is not a surprise. If a gateway authenticates every request for you, silence it with
   `logging.level.com.braintrustappliedresearch.businessrules.UnprotectedEndpointWarning=ERROR`.
 - **With `spring-boot-starter-security`:** Spring Boot blocks anonymous requests by default (they get `401`), but its
-  default setup gives API clients no way to log in, so define a `SecurityFilterChain`. This minimal example uses HTTP
-  Basic and was tested; use your real scheme (OAuth2, JWT, and so on) in production:
+  default setup gives API clients no way to log in, so define a `SecurityFilterChain`. This minimal example uses
+  Hypertext Transfer Protocol (HTTP) Basic authentication and was tested; use your real scheme (Open Authorization
+  (OAuth) 2.0, JSON Web Tokens (JWT), and so on) in production. It turns off Cross-Site Request Forgery (CSRF)
+  protection because this is a stateless API (configured via `sessionCreationPolicy(SessionCreationPolicy.STATELESS)`) with no browser session:
 
   ```java
-  @Bean
-  SecurityFilterChain rulesSecurity(HttpSecurity http) throws Exception {
-      return http
-              .authorizeHttpRequests(a -> a.anyRequest().authenticated())
-              .httpBasic(Customizer.withDefaults())
-              .csrf(csrf -> csrf.disable())   // stateless API: no browser session, so no CSRF token
-              .build();
+  import org.springframework.context.annotation.Bean;
+  import org.springframework.context.annotation.Configuration;
+  import org.springframework.security.config.Customizer;
+  import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+  import org.springframework.security.config.http.SessionCreationPolicy;
+  import org.springframework.security.web.SecurityFilterChain;
+
+  @Configuration
+  class RulesSecurityConfig {
+
+      @Bean
+      SecurityFilterChain rulesSecurity(HttpSecurity http) throws Exception {
+          return http
+                  .authorizeHttpRequests(a -> a.anyRequest().authenticated())
+                  .httpBasic(Customizer.withDefaults())
+                  .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))   // no session cookie
+                  .csrf(csrf -> csrf.disable())   // safe only because there is no session: no browser session, so no CSRF token
+                  .build();
+      }
   }
   ```
 
@@ -126,13 +188,13 @@ Boot 4.0.9 (the version this project builds on) they are older than the fixed on
 
 | Library | Spring Boot 4.0.9 manages | Fixed in | What the fix is for |
 | --- | --- | --- | --- |
-| Jackson 2 (`jackson-2-bom.version`) | 2.21.7 | 2.21.8 | a critical deserialization flaw (CVE-2026-110879) |
+| Jackson 2 (`jackson-2-bom.version`) | 2.21.7 | 2.21.8 | a critical deserialization flaw (Common Vulnerabilities and Exposures (CVE) ID CVE-2026-110879) |
 | Jackson 3 (`jackson-bom.version`) | 3.1.7 | 3.1.8 | the same flaw |
 | Logback (`logback.version`) | 1.5.38 | 1.6.5 | two path-traversal flaws (CVE-2026-19880 and CVE-2026-104721) |
 
 This library does not use Jackson's polymorphic typing, so the Jackson flaw cannot be reached through it, but your
 application may use Jackson elsewhere. The Logback flaws only matter if you use a `SiftingAppender` that discriminates on
-an MDC value, and Logback 1.6 is a minor version past the line Spring Boot supports (this project's tests and startup
+a Mapped Diagnostic Context (MDC) value, and Logback 1.6 is a minor version past the line Spring Boot supports (this project's tests and startup
 pass with it). Check whether your Spring Boot version already manages fixed versions before overriding anything.
 
 To override them, if your project inherits `spring-boot-starter-parent`:
@@ -146,7 +208,7 @@ To override them, if your project inherits `spring-boot-starter-parent`:
 
 With Gradle and the Spring Boot plugin, set `ext['jackson-2-bom.version']` and `ext['jackson-bom.version']` (the
 plugin's documented way to override managed versions; not tested here). If you import `spring-boot-dependencies` as a
-BOM instead of inheriting the parent, these properties have no effect and you must manage the versions yourself.
+bill of materials (BOM) instead of inheriting the parent, these properties have no effect and you must manage the versions yourself.
 
 ## API
 
@@ -155,13 +217,13 @@ BOM instead of inheriting the parent, these properties have no effect and you mu
   and where they are loaded from. Set `spring-boot-business-rules.instructions-enabled=true` to
   turn it on. When it is off the responses to `POST` are **quiet** too, so a caller cannot map your rules through
   ordinary requests: a `GET` gets `405 Method Not Allowed` (only `POST` exists); a response names only the decision that
-  was asked for (no other decisions, no model name); DMN's messages, which name inputs, decisions and DMN ids, are
+  was asked for (no other decisions, no model name); DMN's messages, which name inputs, decisions and DMN identifiers, are
   replaced by one generic message (the details still reach your server logs); `"evaluate":"all"` is an unknown decision
   (`404`); and error bodies do not list the models.
 - `POST <path>` takes a JSON body: every key except `evaluate` (and optional `model`) must be a declared DMN input of
   the model; `evaluate` names the decision to run. Dependent decisions are evaluated too. Any other key, including the
   name of a decision, is rejected with `400`: a value supplied under a decision's name would otherwise replace that
-  decision's result and let a caller bypass the rule. The body must be one **UTF-8** JSON object with **no duplicate keys**, at
+  decision's result and let a caller bypass the rule. The body must be one **UTF-8** (8-bit Unicode Transformation Format) JSON object with **no duplicate keys**, at
   any depth: with the usual "last one wins" a gateway that checked the first `"age"` and this endpoint that used the last
   would disagree about the request, and the same goes for a body in UTF-16 or UTF-32, which parsers can sniff but a
   gateway reading UTF-8 cannot see into. So a duplicate or a non-UTF-8 body (like an empty or malformed one) gets `400`.
@@ -210,10 +272,13 @@ curl -X POST localhost:8080/api/business/rules -H 'Content-Type: application/jso
 
 ## Running the example API
 
-Requires Java 21+ (CI tests on 21 and 25) and Maven 3.9+. The repository has no Maven wrapper.
+Requires Java 21+ (continuous integration, or CI, tests on 21 and 25) and nothing else: the repository includes a Maven wrapper (`./mvnw`, `mvnw.cmd` on Windows) that downloads Maven 3.9.16
+on first use and verifies the download against a pinned SHA-256 (Secure Hash Algorithm 256-bit) checksum in
+`.mvn/wrapper/maven-wrapper.properties`. When you change the Maven version there, update `distributionSha256Sum` too;
+the wrapper refuses a download that does not match. A Maven you installed yourself (`mvn`) also works.
 
 ```sh
-mvn verify
+./mvnw verify
 java -jar example/target/spring-boot-business-rules-example-0.1.0-SNAPSHOT.jar
 ```
 
@@ -253,7 +318,7 @@ Try `"evaluate":"Eligibility"` with different `age` and `income` values to see t
 
 ## Adding a rule and testing it
 
-Rules are [DMN](https://www.omg.org/spec/DMN) models. On startup the app loads every `.dmn` file under
+Rules are DMN models, which are Extensible Markup Language (XML) files. On startup the app loads every `.dmn` file under
 `src/main/resources/rules/` (`spring-boot-business-rules.rules-location`), so a new rule is either a new decision in an
 existing file or a new file. **Restart the app after changing a rule.** This walkthrough adds a new model that assigns a
 loyalty tier to a customer.
@@ -342,7 +407,7 @@ How the pieces map to the API:
 - Each `inputData` name (`annualSpend`, `yearsAsCustomer`) is a JSON key you send in the `POST` body. Only declared
   inputs are accepted; any other key gets a `400`.
 - Each `decision` name (`LoyaltyTier`) is a value you pass as `"evaluate"`.
-- In a decision table, `-` means "any value", and entries are [FEEL](https://www.omg.org/spec/DMN) expressions
+- In a decision table, `-` means "any value", and entries are [Friendly Enough Expression Language (FEEL)](https://www.omg.org/spec/DMN) expressions
   (`>= 2500`, `[30000..75000)`, `"Gold"`). With `hitPolicy="UNIQUE"` exactly one rule must match any input, so write
   rules that do not overlap: every combination of inputs belongs to one row. That keeps the table independent of row
   order and easy to review, and the KIE DMN editor warns when rules overlap. Other policies such as `FIRST` are valid
@@ -361,7 +426,7 @@ result. You can also write DMN in any DMN-compliant editor and drop the resultin
 Rebuild, restart the app, and confirm the new model shows up:
 
 ```sh
-mvn verify
+./mvnw verify
 java -jar example/target/spring-boot-business-rules-example-0.1.0-SNAPSHOT.jar
 
 curl localhost:8080/api/business/rules      # "models" now includes LoyaltyRules
@@ -378,9 +443,15 @@ add `"model":"LoyaltyRules"` to the request to choose one.
 ### 3. Add an automated test
 
 The example's integration test starts the whole app on a random port and calls the real endpoint. Add a test to
-`example/src/test/java/com/braintrustappliedresearch/example/RulesEndpointTest.java`, using its existing `post` helper:
+`example/src/test/java/com/braintrustappliedresearch/example/RulesEndpointTest.java`, using its existing `post` helper. The imports it needs are already at the top of that file:
 
 ```java
+import static org.assertj.core.api.Assertions.assertThat;
+
+import org.junit.jupiter.api.Test;
+
+// ...inside the RulesEndpointTest class:
+
 @Test
 void loyaltyTiers() throws Exception {
     assertThat(post("""
@@ -395,17 +466,17 @@ void loyaltyTiers() throws Exception {
 }
 ```
 
-Run it with the rest of the suite (`mvn verify`), or just the example module:
+Run it with the rest of the suite (`./mvnw verify`), or just the example module:
 
 ```sh
-mvn -pl example -am verify
+./mvnw -pl example -am verify
 ```
 
 Cover each rule row plus the catch-all, and include the boundary values (here `2500` and `10000`).
 
 ## Code quality checks
 
-`mvn verify` runs these checks in every module, and any finding fails the build:
+`./mvnw verify` runs these checks in every module, and any finding fails the build:
 
 | Check | What it catches | Config |
 | --- | --- | --- |
@@ -414,8 +485,8 @@ Cover each rule row plus the catch-all, and include the boundary values (here `2
 | Checkstyle | Style and hygiene: tabs, trailing whitespace, unused or star imports, braces, indentation, line length (140) | `config/checkstyle.xml` |
 | SpotBugs | Likely bugs: null dereferences, exposed mutable state, constructors that throw and so on | `pom.xml` (`spotbugs-maven-plugin`) |
 
-Run one check on its own with `mvn checkstyle:check` or `mvn compile` (lint runs at compile time). SpotBugs needs
-compiled classes, so use `mvn verify -DskipTests`. CI runs the same checks, so a finding fails the pull request too.
+Run one check on its own with `./mvnw checkstyle:check` or `./mvnw compile` (lint runs at compile time). SpotBugs needs
+compiled classes, so use `./mvnw verify -DskipTests`. CI runs the same checks, so a finding fails the pull request too.
 
 To run the checks automatically before every commit, enable the bundled hook once per clone:
 
@@ -423,8 +494,8 @@ To run the checks automatically before every commit, enable the bundled hook onc
 git config core.hooksPath .githooks
 ```
 
-It runs `mvn verify -DskipTests`, which takes about 10 seconds. Use `git commit --no-verify` to skip it. Style choices
-that the `.editorconfig` expresses (4-space Java, 2-space XML/YAML, LF endings) are enforced for Java by Checkstyle.
+It runs `./mvnw verify -DskipTests`, which takes about 10 seconds. Use `git commit --no-verify` to skip it. Style choices
+that the `.editorconfig` expresses (4-space Java, 2-space XML and YAML (YAML Ain't Markup Language), and LF (line feed) endings) are enforced for Java by Checkstyle.
 
 ## Pipeline
 
@@ -432,8 +503,8 @@ that the `.editorconfig` expresses (4-space Java, 2-space XML/YAML, LF endings) 
 
 | Stage | Runs on | What it does |
 | --- | --- | --- |
-| `test` | every push and pull request | `mvn verify` (all tests) on Java 21 and 25 |
-| `docs-build` | push to `main`, after `test` | lints `docs/openapi.yaml`, generates the Javadoc, builds the README + Swagger UI + Javadoc site. Runs the npm and Maven tooling with a read-only token and no OIDC identity |
+| `test` | every push and pull request | `./mvnw verify` (all tests) on Java 21 and 25 |
+| `docs-build` | push to `main`, after `test` | lints `docs/openapi.yaml`, generates the Javadoc, builds the README + Swagger UI + Javadoc site. Runs the npm and Maven tooling with a read-only token and no OpenID Connect (OIDC) identity |
 | `docs` | after `docs-build` | deploys the site that `docs-build` produced to GitHub Pages. It holds the Pages permissions and runs no build tooling, so a compromised build dependency cannot deploy by itself |
 | `snyk` | `v*` tags, alongside `test`; or a manual run (Actions → CI → Run workflow), which never publishes | **release gate:** Snyk dependency scan (every module) and Snyk Code scan. Blocks on a dependency finding of medium severity or higher **that has a published fix** (findings with no fix yet are listed but do not block) and on any medium-or-higher Snyk Code finding |
 | `publish` | `v*` tags, after `test` **and** `snyk`, and your approval of the `maven-central` environment | sets the version from the tag, signs, uploads and validates the bundle on Maven Central. It does **not** release it: you click Publish in the Central Portal |
@@ -449,7 +520,7 @@ nothing. If it fails, fix the problem on `main`, delete the tag (`git tag -d v1.
 and tag again. To control who may create release tags at all, add a repository tag ruleset for `v*` (Settings → Rules).
 Build the docs site locally with `./docs/build-site.sh`.
 The Javadoc is generated from the comments in the source, so it is not committed. The site serves it at
-`/javadoc/`. To build just the API docs, run `mvn -pl spring-boot-business-rules javadoc:javadoc` and open
+`/javadoc/`. To build just the API docs, run `./mvnw -pl spring-boot-business-rules javadoc:javadoc` and open
 `spring-boot-business-rules/target/reports/apidocs/index.html`. Javadoc warnings fail the build, so write a comment
 (with `@param` and `@return`) for anything public you add to the library.
 
@@ -464,7 +535,7 @@ required reviewers so each release needs a manual approval:
 | --- | --- |
 | `MAVEN_CENTRAL_USERNAME` | Central Portal user token, username half (central.sonatype.com → Account → Generate User Token) |
 | `MAVEN_CENTRAL_PASSWORD` | Central Portal user token, password half |
-| `MAVEN_GPG_PRIVATE_KEY` | ASCII-armored private key: `gpg --armor --export-secret-keys <KEY_ID>` |
+| `MAVEN_GPG_PRIVATE_KEY` | GNU Privacy Guard (GPG) private key in ASCII (American Standard Code for Information Interchange) armor format: `gpg --armor --export-secret-keys <KEY_ID>` |
 | `MAVEN_GPG_PASSPHRASE` | Passphrase for that key |
 
 **Repository secret `SNYK_TOKEN`** (Settings → Secrets and variables → Actions) is the Snyk API token for the release
@@ -482,8 +553,52 @@ Also required:
   the `braintrust-applied-research.github.io` address redirects to it). The docs stages need no secrets (it uses the
   workflow's OIDC token).
 - **Central namespace**: the `com.braintrustappliedresearch` groupId must be verified on central.sonatype.com
-  (Namespaces → add it, then publish the DNS TXT record the Portal gives you on `braintrustappliedresearch.com`).
+  (Namespaces → add it, then publish the Domain Name System (DNS) TXT record the Portal gives you on `braintrustappliedresearch.com`).
 - **Public GPG key**: publish it to a keyserver (e.g. `keys.openpgp.org`) so Central can verify signatures.
+
+## FAQ
+
+### Why use this package instead of pulling in KIE myself?
+
+You can use KIE directly, and nothing here stops you. This package is a thin, opinionated layer, and its value is the
+work you would otherwise repeat and the mistakes you would otherwise have to discover:
+
+- **Wiring.** It auto-configures the DMN runtime, finds `.dmn` files (`spring-boot-business-rules.rules-location`),
+  fails fast on a model that does not compile, and exposes a REST endpoint. With plain KIE you write that glue yourself.
+- **A safe request contract.** Only declared DMN inputs are accepted, and a key that matches a decision's name is
+  rejected with `400`. Otherwise a caller could supply a decision's result and bypass the rule. Bodies must be UTF-8
+  with no duplicate keys, so a gateway and this endpoint cannot disagree about a request.
+- **Honest results.** A decision that produced `null`, or relied on one that did, returns `422` rather than a
+  successful-looking `200` (DMN itself only logs a warning).
+- **Abuse limits.** Caps on input count, name length, value length and body size, with errors that do not echo the
+  offending text.
+- **Quiet by default.** With `instructions-enabled` off, responses do not reveal your models, inputs or decisions.
+  Responses also carry `nosniff` and `no-store` headers, and the library warns at startup when the endpoint is
+  unauthenticated.
+- **Documentation and checks.** An OpenAPI description, Javadoc, an example app with tests, and a release pipeline with a
+  dependency scan.
+
+If you only need to call the engine from your own Java code, with your own controller and rules about what callers may
+send, using KIE directly is a perfectly good choice and this package adds little for you.
+
+### Do I need to know Drools or KIE to use it?
+
+No. You write a DMN model, put it in `rules/`, and call the endpoint. KIE knowledge helps when authoring complex models.
+
+### Which editor should I use for DMN files?
+
+The [KIE DMN editor for VS Code](https://kie.apache.org/) is what the screenshots here use, but any DMN-compliant
+editor works. See [Adding a rule and testing it](#adding-a-rule-and-testing-it).
+
+### Can I change rules without redeploying?
+
+Not at runtime. Rules are loaded at startup, so restart the application after changing a `.dmn` file. The benefit is
+that a rule change is an edit to a model, not to Java code.
+
+### Is the endpoint safe to expose publicly?
+
+Not on its own. It has no authentication, so protect it in your application like any other API, and put rate limiting and
+a body-size limit in front of it. See [Securing the endpoint](#securing-the-endpoint).
 
 ## License
 
