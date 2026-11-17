@@ -90,4 +90,4 @@ If a pull request is squash-merged, its title becomes the commit title, so use t
   override is a minor version past the line Spring Boot supports, so re-run the tests and a startup check when changing it.
 
 The CI pipeline runs the tests on pull requests. Publishing to Maven Central is done by maintainers only, from version
-tags.
+tags. The maintainer runbook is `.github/RELEASING.md`.
