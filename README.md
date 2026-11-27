@@ -115,7 +115,7 @@ ten inputs and a hundred rules stays readable as a table, and rarely does as nes
 <dependency>
   <groupId>com.braintrustappliedresearch</groupId>
   <artifactId>spring-boot-business-rules</artifactId>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
 </dependency>
 ```
 
@@ -340,7 +340,7 @@ the wrapper refuses a download that does not match. A Maven you installed yourse
 
 ```sh
 ./mvnw verify
-java -jar example/target/spring-boot-business-rules-example-0.1.1-SNAPSHOT.jar
+java -jar example/target/spring-boot-business-rules-example-0.2.1-SNAPSHOT.jar
 ```
 
 The app prints a custom startup banner (`example/src/main/resources/banner.txt`) and starts on port 8080 (override with
@@ -489,7 +489,7 @@ Rebuild, restart the app, and confirm the new model shows up:
 
 ```sh
 ./mvnw verify
-java -jar example/target/spring-boot-business-rules-example-0.1.1-SNAPSHOT.jar
+java -jar example/target/spring-boot-business-rules-example-0.2.1-SNAPSHOT.jar
 
 curl localhost:8080/api/business/rules      # "models" now includes LoyaltyRules
 
