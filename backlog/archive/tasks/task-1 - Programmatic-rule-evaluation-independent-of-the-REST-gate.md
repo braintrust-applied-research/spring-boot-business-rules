@@ -2,7 +2,8 @@
 id: task-1
 title: Programmatic rule evaluation independent of the REST gate
 status: Done
-assignee: []
+assignee:
+  - Chris Pilson
 labels:
   - feature
   - library
