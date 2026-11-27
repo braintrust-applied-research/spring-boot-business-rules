@@ -19,7 +19,7 @@ class RulesInstructionsControllerTest {
 
     private static MockMvc mvc(String servletPath) {
         RulesEngine engine = new RulesEngine(List.of(new ClassPathResource("test-models/model-a.dmn")));
-        BusinessRulesProperties properties = new BusinessRulesProperties(true, "/business/rules",
+        BusinessRulesProperties properties = new BusinessRulesProperties(new BusinessRulesProperties.Web(true), "/business/rules",
                 "classpath*:rules/**/*.dmn", true, BusinessRulesProperties.Limits.defaults());
         return MockMvcBuilders.standaloneSetup(new RulesInstructionsController(engine, properties, servletPath))
                 .addPlaceholderValue(BusinessRulesProperties.PREFIX + ".path", "/business/rules")

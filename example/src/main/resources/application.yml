@@ -3,6 +3,10 @@ server:
     context-path: /api
 
 spring-boot-business-rules:
+  # Optional. Default: false (the web side is opt-in). The example sets it to true so the REST endpoint is served;
+  # leave it out (or false) and the rules can still be evaluated from Java, but there is no HTTP endpoint.
+  web:
+    enabled: true
   # Appended to the server context path: the endpoint is served at /api/business/rules
   path: /business/rules
   # Off by default in the library. The example opts in so `GET /api/business/rules` shows usage and the loaded models.

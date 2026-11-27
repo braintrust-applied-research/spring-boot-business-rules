@@ -12,7 +12,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * <p>For example, with {@code server.servlet.context-path=/api} and
  * {@code spring-boot-business-rules.path=/business/rules}, the endpoint is served at {@code /api/business/rules}.
  *
- * @param enabled       whether the rules endpoint is registered
+ * @param web           the web side: the REST endpoint and its help route. The rules engine is registered either way,
+ *                      so rules can still be evaluated from Java
  * @param path          path of the rules endpoint, appended to the application's server context path
  *                      and any Spring MVC servlet path
  * @param rulesLocation Spring resource pattern used to find DMN (.dmn) models
@@ -25,11 +26,22 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  */
 @ConfigurationProperties(BusinessRulesProperties.PREFIX)
 public record BusinessRulesProperties(
-        @DefaultValue("true") boolean enabled,
+        @DefaultValue Web web,
         @DefaultValue("/rules") String path,
         @DefaultValue("classpath*:rules/**/*.dmn") String rulesLocation,
         @DefaultValue("false") boolean instructionsEnabled,
         @DefaultValue Limits limits) {
+
+    /**
+     * The web side of the library: the REST endpoint, its response-headers filter and its help route. Leaving it off
+     * (the default) does not stop the rules engine, which application code can still call directly.
+     *
+     * @param enabled whether the REST endpoint is registered in a servlet web application. Off by default: the web
+     *                side is opt-in, so set it to true to serve the endpoint. Either way, evaluating rules from Java
+     *                keeps working
+     */
+    public record Web(@DefaultValue("false") boolean enabled) {
+    }
 
     /** The property prefix: {@value}. */
     public static final String PREFIX = "spring-boot-business-rules";

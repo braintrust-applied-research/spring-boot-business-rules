@@ -26,7 +26,7 @@ class ConfigurationMetadataTest {
     @Test
     void describesEveryProperty() throws IOException {
         assertThat(metadata()).contains(
-                "\"name\": \"spring-boot-business-rules.enabled\"",
+                "\"name\": \"spring-boot-business-rules.web.enabled\"",
                 "\"name\": \"spring-boot-business-rules.path\"",
                 "\"name\": \"spring-boot-business-rules.rules-location\"",
                 "\"name\": \"spring-boot-business-rules.instructions-enabled\"",

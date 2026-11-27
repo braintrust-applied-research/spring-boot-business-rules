@@ -12,7 +12,7 @@ Changes must support all of the following:
 
 | Platform | Supported versions |
 | --- | --- |
-| Spring Boot | the **4.0.x** line or greater (the parent version in the root `pom.xml` is the minimum) |
+| Spring Boot | the **4.1.x** line or greater (the parent version in the root `pom.xml` is the minimum) |
 | Java | the current LTS (**Java 25**) and the previous LTS (**Java 21**) |
 
 A change that only works on a newer Spring Boot or Java than these, or that drops either listed Java version, will
@@ -61,7 +61,7 @@ Examples:
 feat(library): add "evaluate":"all" to run every decision in a model
 fix(library): reject request keys that are not declared inputs
 docs: add decision table screenshots to the README
-build(deps): bump Spring Boot to 4.0.9
+build(deps): bump Spring Boot to 4.1.3
 ```
 
 If a pull request is squash-merged, its title becomes the commit title, so use this style for pull request titles too.
@@ -85,7 +85,7 @@ If a pull request is squash-merged, its title becomes the commit title, so use t
   (see the README's Pipeline section for the `SNYK_TOKEN` secret). Run the same two commands locally, with `--severity-threshold=medium`, before tagging. The gate reads `fixedIn` from `snyk test --json` and does not use `--fail-on`, which only counts issues fixable by upgrading a direct dependency and so passed critical transitive issues that did have fixes.
   To accept a finding deliberately, prefer fixing it; otherwise record a documented, dated ignore with a reason in a
   `.snyk` policy file so the exception is reviewable. The parent `pom.xml` overrides a few versions that Spring Boot
-  manages, to pick up security fixes sooner (`jackson-2-bom.version`, `jackson-bom.version`, `logback.version`; each has
+  manages, to pick up security fixes sooner (currently `logback.version`; it has
   a comment saying why). Remove an override once the Spring Boot parent manages a version at least that new. The Logback
   override is a minor version past the line Spring Boot supports, so re-run the tests and a startup check when changing it.
 

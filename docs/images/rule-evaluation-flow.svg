@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" role="img" aria-labelledby="t d" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="14">
+  <title id="t">How business rule data is loaded, called and returned</title>
+  <desc id="d">A .dmn file under rules is loaded at startup into the RulesEngine bean. Only rules loaded at startup can run; there is no way to run a one-off rule. Application code can call the engine directly in Java. An HTTP client can call it through the REST endpoint, which is opt-in with spring-boot-business-rules.web.enabled=true (off by default) and gated by a servlet web application, Spring Security and request limits. Both paths receive an Evaluation with result, decisions, messages and failed.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#37474f"/>
+    </marker>
+    <style>
+      .box { fill: #ffffff; stroke: #37474f; stroke-width: 1.5; }
+      .engine { fill: #e3f2fd; stroke: #1565c0; stroke-width: 2; }
+      .gate { fill: #fff3e0; stroke: #e65100; stroke-width: 1.5; stroke-dasharray: 6 4; }
+      .out { fill: #e8f5e9; stroke: #2e7d32; stroke-width: 1.5; }
+      .line { stroke: #37474f; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+      .t { fill: #1b1b1b; }
+      .s { fill: #455a64; font-size: 12px; }
+      .h { font-weight: 600; }
+      .lane { fill: #fafafa; stroke: #cfd8dc; }
+    </style>
+  </defs>
+  <rect width="960" height="600" fill="#ffffff"/>
+
+  <!-- 1. Author and load -->
+  <text x="30" y="30" class="t h" font-size="16">1. Write and load</text>
+  <rect x="30" y="45" width="230" height="80" rx="8" class="box"/>
+  <text x="145" y="75" text-anchor="middle" class="t h">customer-rules.dmn</text>
+  <text x="145" y="95" text-anchor="middle" class="s">in src/main/resources/rules/</text>
+  <text x="145" y="112" text-anchor="middle" class="s">model name: CustomerRules</text>
+
+  <rect x="350" y="45" width="260" height="80" rx="8" class="box"/>
+  <text x="480" y="72" text-anchor="middle" class="t h">Startup loading</text>
+  <text x="480" y="92" text-anchor="middle" class="s">rules-location pattern finds .dmn files</text>
+  <text x="480" y="110" text-anchor="middle" class="s">invalid model: startup fails fast</text>
+
+  <rect x="700" y="45" width="230" height="80" rx="8" class="engine"/>
+  <text x="815" y="72" text-anchor="middle" class="t h">RulesEngine bean</text>
+  <text x="815" y="92" text-anchor="middle" class="s">always registered, endpoint on or off</text>
+  <text x="815" y="110" text-anchor="middle" class="s" font-weight="600">only these rules run: no one-off rules</text>
+
+  <path d="M260 85 H348" class="line"/>
+  <path d="M610 85 H698" class="line"/>
+
+  <!-- 2. Two ways in -->
+  <text x="30" y="175" class="t h" font-size="16">2. Call it</text>
+
+  <rect x="30" y="190" width="420" height="215" rx="10" class="lane"/>
+  <text x="45" y="212" class="t h">From Java (never gated)</text>
+  <rect x="55" y="230" width="370" height="70" rx="8" class="box"/>
+  <text x="240" y="256" text-anchor="middle" class="t h">Your code (service, job, test)</text>
+  <text x="240" y="276" text-anchor="middle" class="s">rules.evaluate("CustomerRules", "Eligibility", inputs)</text>
+  <text x="240" y="292" text-anchor="middle" class="s">rules.evaluateAll("CustomerRules", inputs)</text>
+  <rect x="55" y="325" width="370" height="60" rx="8" class="box"/>
+  <text x="240" y="350" text-anchor="middle" class="t">Checks: model and decision exist,</text>
+  <text x="240" y="368" text-anchor="middle" class="t">only declared inputs (else IllegalArgumentException)</text>
+  <path d="M240 300 V323" class="line"/>
+
+  <rect x="480" y="190" width="450" height="320" rx="10" class="lane"/>
+  <text x="495" y="212" class="t h">Over HTTP (opt-in and gated)</text>
+  <rect x="505" y="230" width="400" height="50" rx="8" class="box"/>
+  <text x="705" y="252" text-anchor="middle" class="t h">HTTP client</text>
+  <text x="705" y="270" text-anchor="middle" class="s">POST /rules  {"evaluate":"Eligibility", "age":36, ...}</text>
+  <rect x="505" y="305" width="400" height="95" rx="8" class="gate"/>
+  <text x="705" y="327" text-anchor="middle" class="t h">The gate</text>
+  <text x="705" y="347" text-anchor="middle" class="s">spring-boot-business-rules.web.enabled=true (opt-in)</text>
+  <text x="705" y="363" text-anchor="middle" class="s">servlet web application, your Spring Security rules</text>
+  <text x="705" y="379" text-anchor="middle" class="s">request limits, undeclared inputs rejected (400)</text>
+  <rect x="505" y="425" width="400" height="60" rx="8" class="box"/>
+  <text x="705" y="451" text-anchor="middle" class="t h">RulesController</text>
+  <text x="705" y="469" text-anchor="middle" class="s">turns JSON into inputs, calls the engine</text>
+  <path d="M705 280 V303" class="line"/>
+  <path d="M705 400 V423" class="line"/>
+
+  <!-- 3. Result -->
+  <text x="30" y="545" class="t h" font-size="16">3. Result</text>
+  <rect x="150" y="527" width="400" height="55" rx="8" class="out"/>
+  <text x="350" y="550" text-anchor="middle" class="t h">Evaluation record</text>
+  <text x="350" y="568" text-anchor="middle" class="s">result, decisions, messages, failed</text>
+  <rect x="580" y="527" width="350" height="55" rx="8" class="out"/>
+  <text x="755" y="550" text-anchor="middle" class="t h">JSON response</text>
+  <text x="755" y="568" text-anchor="middle" class="s">200 decided, 422 not decided, 400/404/413 bad request</text>
+
+  <!-- both paths run the model in the engine, then return the evaluation -->
+  <path d="M425 355 H465 V148 H815 V127" class="line"/>
+  <text x="560" y="141" class="s">evaluates</text>
+  <path d="M905 455 H945 V100 H932" class="line"/>
+  <path d="M240 385 V525" class="line"/>
+  <text x="248" y="470" class="s">returns</text>
+  <path d="M705 485 V525" class="line"/>
+</svg>

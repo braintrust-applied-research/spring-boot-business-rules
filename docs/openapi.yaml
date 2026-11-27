@@ -33,7 +33,8 @@ paths:
         Returns usage help, the effective `spring-boot-business-rules.*` configuration, and the loaded DMN models,
         their inputs and decisions.
 
-        **Disabled by default.** It is only served when `spring-boot-business-rules.instructions-enabled=true`
+        **Disabled by default.** It is only served when `spring-boot-business-rules.web.enabled=true` (the whole endpoint is
+        opt-in) and `spring-boot-business-rules.instructions-enabled=true`
         (the example app enables it). Otherwise this operation does not exist and the path answers `405`.
       responses:
         '200':
@@ -144,7 +145,7 @@ components:
           type: object
           description: Effective settings, keyed by the property name that sets each one
           properties:
-            spring-boot-business-rules.enabled:
+            spring-boot-business-rules.web.enabled:
               type: boolean
             spring-boot-business-rules.path:
               type: string

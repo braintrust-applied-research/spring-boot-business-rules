@@ -1,11 +1,12 @@
 # spring-boot-business-rules
 
-Opinionated repository to connect business rules written in a domain-specific language (DSL) to Spring Boot 4.0.9+.
+Opinionated repository to connect business rules written in a domain-specific language (DSL) to Spring Boot 4.1.3+.
 
 Drop in the `spring-boot-business-rules` artifact and a
 [Decision Model and Notation (DMN)](https://www.omg.org/spec/DMN) rules engine, from
-[Apache KIE](https://kie.apache.org/) (Knowledge Is Everything; this project uses its Drools 10.x engine), is exposed
-over a Representational State Transfer (REST) application programming interface (API) that exchanges JavaScript Object
+[Apache KIE](https://kie.apache.org/) (Knowledge Is Everything; this project uses its Drools 10.x engine), is available
+to your Java code and, when you opt in with `spring-boot-business-rules.web.enabled=true`, exposed over a
+Representational State Transfer (REST) application programming interface (API) that exchanges JavaScript Object
 Notation (JSON). No code required. See [What is KIE?](#what-is-kie) below.
 
 > **Note:** this project was created quickly leveraging artificial intelligence (AI). It scratches an itch for people who
@@ -24,6 +25,7 @@ Notation (JSON). No code required. See [What is KIE?](#what-is-kie) below.
 - [Using the artifact](#using-the-artifact)
 - [Securing the endpoint](#securing-the-endpoint)
 - [Dependency versions](#dependency-versions)
+- [Evaluating from Java](#evaluating-from-java)
 - [API](#api)
   - [Evaluating every decision at once](#evaluating-every-decision-at-once)
 - [Running the example API](#running-the-example-api)
@@ -105,7 +107,7 @@ ten inputs and a hundred rules stays readable as a table, and rarely does as nes
 | Module | Purpose |
 | --- | --- |
 | `spring-boot-business-rules/` | Auto-configured library: DMN engine + REST endpoint |
-| `example/` | Spring Boot 4.0.9 app with a `CustomerRules` DMN model |
+| `example/` | Spring Boot 4.1.3 app with a `CustomerRules` DMN model |
 
 ## Using the artifact
 
@@ -117,13 +119,14 @@ ten inputs and a hundred rules stays readable as a table, and rarely does as nes
 </dependency>
 ```
 
-Put `.dmn` files under `src/main/resources/rules/`. Configuration:
+Put `.dmn` files under `src/main/resources/rules/`. The REST endpoint is **opt-in**: set
+`spring-boot-business-rules.web.enabled=true` to serve it, or leave it off and call the rules from Java. Configuration:
 
 | Property | Default | Meaning |
 | --- | --- | --- |
 | `spring-boot-business-rules.path` | `/rules` | Endpoint path, **appended to** `server.servlet.context-path` (and any `spring.mvc.servlet.path`) |
 | `spring-boot-business-rules.rules-location` | `classpath*:rules/**/*.dmn` | Where to find DMN models |
-| `spring-boot-business-rules.enabled` | `true` | Turn the endpoint off |
+| `spring-boot-business-rules.web.enabled` | `false` | **Opt in to the web side (the REST endpoint).** Off by default, so adding the library exposes nothing over HTTP until you set this to `true`. The rules load and can be evaluated from Java either way (see [Evaluating from Java](#evaluating-from-java)). Replaces the old `spring-boot-business-rules.enabled`, which now stops startup with a message asking you to rename it |
 | `spring-boot-business-rules.instructions-enabled` | `false` | Let callers learn about the rules: serves `GET <path>` (usage help plus the loaded models, inputs and decisions), enables `"evaluate":"all"`, and returns detailed responses. **Off by default; opt in to use it** |
 | `spring-boot-business-rules.limits.max-inputs` | `500` | Most inputs one request may carry. A request over a limit gets `400` |
 | `spring-boot-business-rules.limits.max-name-length` | `256` | Longest `evaluate` or `model` value, input name, or name inside an input value (characters) |
@@ -134,7 +137,8 @@ With `server.servlet.context-path=/api` and `spring-boot-business-rules.path=/bu
 
 ## Securing the endpoint
 
-**The endpoint has no authentication of its own.** Anyone who can reach your application can call `POST <path>`, and by
+**The endpoint is opt-in (`spring-boot-business-rules.web.enabled=true`) and has no authentication of its own.** Once
+enabled, anyone who can reach your application can call `POST <path>`, and by
 trying inputs can work out your rules' thresholds. Protect it in the host application, like any API.
 
 - **No Spring Security on the classpath:** the endpoint is open, and the library logs a startup warning
@@ -178,37 +182,94 @@ trying inputs can work out your rules' thresholds. Protect it in the host applic
   application or Spring Security already sets is left alone.
 - **Also put in front of it:** rate limiting, and keep `spring-boot-business-rules.instructions-enabled` off outside
   development.
-- **Turn it off** entirely with `spring-boot-business-rules.enabled=false`.
+- **Off by default.** Nothing is served until you set `spring-boot-business-rules.web.enabled=true`. Leave it off (or
+  set it back to `false`) to close the HTTP endpoint; evaluating rules from your own code keeps working.
 
 ## Dependency versions
 
-This project's own `pom.xml` raises a few versions that Spring Boot manages, to pick up security fixes sooner. **Those
-overrides do not reach your application.** You get the versions your own Spring Boot manages, so check them. With Spring
-Boot 4.0.9 (the version this project builds on) they are older than the fixed ones:
+This project builds on Spring Boot 4.1.3. Its own `pom.xml` raises one version that Spring Boot manages, to pick up a
+security fix sooner. **That override does not reach your application.** You get the versions your own Spring Boot
+manages, so check them:
 
-| Library | Spring Boot 4.0.9 manages | Fixed in | What the fix is for |
+| Library | Spring Boot 4.1.3 manages | Fixed in | What the fix is for |
 | --- | --- | --- | --- |
-| Jackson 2 (`jackson-2-bom.version`) | 2.21.7 | 2.21.8 | a critical deserialization flaw (Common Vulnerabilities and Exposures (CVE) ID CVE-2026-110879) |
-| Jackson 3 (`jackson-bom.version`) | 3.1.7 | 3.1.8 | the same flaw |
-| Logback (`logback.version`) | 1.5.38 | 1.6.5 | two path-traversal flaws (CVE-2026-19880 and CVE-2026-104721) |
+| Logback (`logback.version`) | 1.5.38 | 1.6.5 | two path-traversal flaws (Common Vulnerabilities and Exposures (CVE) IDs CVE-2026-19880 and CVE-2026-104721) |
 
-This library does not use Jackson's polymorphic typing, so the Jackson flaw cannot be reached through it, but your
-application may use Jackson elsewhere. The Logback flaws only matter if you use a `SiftingAppender` that discriminates on
-a Mapped Diagnostic Context (MDC) value, and Logback 1.6 is a minor version past the line Spring Boot supports (this project's tests and startup
-pass with it). Check whether your Spring Boot version already manages fixed versions before overriding anything.
+The Logback flaws only matter if you use a `SiftingAppender` that discriminates on a Mapped Diagnostic Context (MDC)
+value, and Logback 1.6 is a minor version past the line Spring Boot supports (this project's tests and startup pass with
+it). Check whether your Spring Boot version already manages a fixed version before overriding anything.
 
-To override them, if your project inherits `spring-boot-starter-parent`:
+**If you are on Spring Boot 4.1.0 to 4.1.2**, upgrade to 4.1.3 or later. Those versions manage Spring Security 7.1.2 or
+older, which has CVE-2026-59333 (IP address matching ignores the address family, so a request from an IPv6 address can
+match an IPv4 rule; Snyk ID SNYK-JAVA-ORGSPRINGFRAMEWORKSECURITY-22729233), Spring Framework 7.0.10 or older, which has
+CVE-2026-59394 (an open redirect in `UrlHandlerFilter` for paths that start with three or more slashes; Snyk ID
+SNYK-JAVA-ORGSPRINGFRAMEWORK-22727242; only reachable if your application registers that filter), and Jackson versions with a critical
+deserialization flaw (CVE-2026-110879; this library does not use Jackson's polymorphic typing, so it cannot be reached
+through it, but your application may use Jackson elsewhere). If you cannot upgrade yet, override the managed versions
+in a project that inherits `spring-boot-starter-parent`:
 
 ```xml
 <properties>
+  <spring-security.version>7.1.3</spring-security.version>
+  <spring-framework.version>7.0.11</spring-framework.version>
   <jackson-2-bom.version>2.21.8</jackson-2-bom.version>
   <jackson-bom.version>3.1.8</jackson-bom.version>
 </properties>
 ```
 
-With Gradle and the Spring Boot plugin, set `ext['jackson-2-bom.version']` and `ext['jackson-bom.version']` (the
-plugin's documented way to override managed versions; not tested here). If you import `spring-boot-dependencies` as a
-bill of materials (BOM) instead of inheriting the parent, these properties have no effect and you must manage the versions yourself.
+With Gradle and the Spring Boot plugin, set `ext['spring-security.version']`, `ext['spring-framework.version']`, `ext['jackson-2-bom.version']` and
+`ext['jackson-bom.version']` (the plugin's documented way to override managed versions; not tested here). If you import
+`spring-boot-dependencies` as a bill of materials (BOM) instead of inheriting the parent, these properties have no
+effect and you must manage the versions yourself.
+
+## Evaluating from Java
+
+You do not have to go through HTTP. The `RulesEngine` bean is registered in every Spring Boot application (web or not)
+that has the library on the classpath, and it is **not** affected by `spring-boot-business-rules.web.enabled`, which
+gates only the REST endpoint (and is off by default). Inject it and evaluate a model by the `name` in its `.dmn` file (not the file name):
+
+```java
+import java.util.Map;
+
+import org.springframework.stereotype.Service;
+
+import com.braintrustappliedresearch.businessrules.RulesEngine;
+
+@Service
+class OfferService {
+
+    private final RulesEngine rules;
+
+    OfferService(RulesEngine rules) {
+        this.rules = rules;
+    }
+
+    String eligibility(String firstName, String lastName, int age, int income, String zipCode) {
+        RulesEngine.Evaluation e = rules.evaluate("CustomerRules", "Eligibility",
+                Map.of("firstName", firstName, "lastName", lastName, "age", age, "income", income, "zipCode", zipCode));
+        if (e.failed()) {
+            throw new IllegalStateException("Rule did not decide: " + e.messages());
+        }
+        return (String) e.result();
+    }
+}
+```
+
+![Flow diagram: a .dmn file in rules/ is loaded at startup into the RulesEngine bean. Your Java code calls the engine directly and gets an Evaluation record back. An HTTP client passes the gate (web.enabled=true, off by default, servlet web app, Spring Security, request limits) and the RulesController, then gets a JSON response. Only models loaded at startup can run; there is no way to run a one-off rule](docs/images/rule-evaluation-flow.svg)
+
+`rules.evaluateAll("CustomerRules", inputs)` runs every decision in the model. Things to know:
+
+- It throws `IllegalArgumentException` for an unknown model, an unknown decision, or a key that is not a declared input
+  (supplying a decision's name would otherwise replace that decision's result).
+- DMN problems (a missing or wrong-typed input, or a decision that yields `null`) do not throw. Check
+  `Evaluation.failed()` and `Evaluation.messages()`, as the endpoint does for its `422`.
+- The request `limits` apply to the endpoint only. Bound the size of data you pass in from untrusted sources yourself.
+- Loading still fails fast at startup if a model does not compile, even when the endpoint is disabled.
+- **Only the rules loaded at startup can run.** You cannot hand the engine a one-off `.dmn` file, resource or string and
+  evaluate it: you cannot construct a `RulesEngine` yourself (its constructor is not public), models are looked up by
+  name, and a `DMNModel` object from anywhere else is refused with `IllegalArgumentException`. To add or change a rule,
+  put the `.dmn` file under `rules-location` and restart. This keeps the set of rules that can run the same as the set
+  you reviewed and deployed.
 
 ## API
 
@@ -272,7 +333,7 @@ curl -X POST localhost:8080/api/business/rules -H 'Content-Type: application/jso
 
 ## Running the example API
 
-Requires Java 21+ (continuous integration, or CI, tests on 21 and 25) and nothing else: the repository includes a Maven wrapper (`./mvnw`, `mvnw.cmd` on Windows) that downloads Maven 3.9.16
+Requires Java 21+ (continuous integration, or CI, tests on 21 and 25) and nothing else: the repository includes a Maven wrapper (`./mvnw`, `mvnw.cmd` on Windows) that downloads Maven 3.10.1
 on first use and verifies the download against a pinned SHA-256 (Secure Hash Algorithm 256-bit) checksum in
 `.mvn/wrapper/maven-wrapper.properties`. When you change the Maven version there, update `distributionSha256Sum` too;
 the wrapper refuses a download that does not match. A Maven you installed yourself (`mvn`) also works.
@@ -287,7 +348,8 @@ The app prints a custom startup banner (`example/src/main/resources/banner.txt`)
 `http://localhost:8080/api/business/rules`: `/api` is the context path set in
 `example/src/main/resources/application.yml`, and `/business/rules` is `spring-boot-business-rules.path`.
 
-The example app sets `spring-boot-business-rules.instructions-enabled: true` in `application.yml`, so you can ask
+The example app sets `spring-boot-business-rules.web.enabled: true` (optional; the default is `false`) and
+`spring-boot-business-rules.instructions-enabled: true` in `application.yml`, so it serves HTTP and you can ask
 the endpoint what it can do, then evaluate a decision:
 
 ```sh
@@ -592,7 +654,7 @@ editor works. See [Adding a rule and testing it](#adding-a-rule-and-testing-it).
 
 ### Can I change rules without redeploying?
 
-Not at runtime. Rules are loaded at startup, so restart the application after changing a `.dmn` file. The benefit is
+Not at runtime, and one-off rules cannot be run either. Rules are loaded at startup, so restart the application after changing a `.dmn` file. The benefit is
 that a rule change is an edit to a model, not to Java code.
 
 ### Is the endpoint safe to expose publicly?

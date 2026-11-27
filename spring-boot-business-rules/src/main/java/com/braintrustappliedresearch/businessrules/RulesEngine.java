@@ -37,6 +37,12 @@ import org.springframework.util.StreamUtils;
  * <p>The engine is built once from a set of {@code .dmn} resources and is then used to describe the loaded models
  * and to evaluate decisions. If no models are found it still starts, logs a warning, and has nothing to evaluate.
  * Instances are immutable after construction and safe to share between threads.
+ *
+ * <p><strong>Only rules that were loaded at startup can be evaluated.</strong> There is no way to hand the engine a
+ * one-off {@code .dmn} file, resource or string and run it: the constructor is not public (the auto-configuration
+ * builds the one engine from {@code rules-location}), models are looked up by name, and a {@link DMNModel} that this
+ * engine did not load is refused. To add or change a rule, put the {@code .dmn} file under {@code rules-location} and
+ * restart.
  */
 public final class RulesEngine {
 
@@ -46,13 +52,14 @@ public final class RulesEngine {
     private final List<DMNModel> models;
 
     /**
-     * Loads every DMN model in the given resources into one runtime.
+     * Loads every DMN model in the given resources into one runtime. Not public on purpose: only the
+     * auto-configuration, from {@code rules-location}, decides which rules exist.
      *
      * @param resources the {@code .dmn} files to load; may be empty
      * @throws IllegalStateException if a resource cannot be read or the models do not compile into a runtime
      *                               (for example because of invalid DMN)
      */
-    public RulesEngine(Collection<org.springframework.core.io.Resource> resources) {
+    RulesEngine(Collection<org.springframework.core.io.Resource> resources) {
         List<Resource> kieResources = new ArrayList<>();
         for (org.springframework.core.io.Resource resource : resources) {
             try (var in = resource.getInputStream()) {
@@ -70,8 +77,15 @@ public final class RulesEngine {
             this.models = List.of();
             return;
         }
-        this.runtime = DMNRuntimeBuilder.fromDefaults().buildConfiguration().fromResources(kieResources)
-                .getOrElseThrow(e -> new IllegalStateException("Cannot build DMN runtime", e));
+        try {
+            this.runtime = DMNRuntimeBuilder.fromDefaults().buildConfiguration().fromResources(kieResources)
+                    .getOrElseThrow(e -> new IllegalStateException("Cannot build DMN runtime", e));
+        } catch (IllegalStateException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            // KIE can fail with an unchecked exception (for example a null pointer on a file that is not DMN at all)
+            throw new IllegalStateException("Cannot build DMN runtime: a resource is not valid DMN", e);
+        }
         this.models = runtime.getModels();
         models.forEach(m -> log.info("Loaded DMN model '{}' ({} decisions)", m.getName(), m.getDecisions().size()));
     }
@@ -170,8 +184,10 @@ public final class RulesEngine {
      * @param inputs       the DMN input values, keyed by input name; keys that are not declared inputs of the model
      *                     are ignored (see {@link #unknownInputs})
      * @return the result, every decision that was evaluated along the way, and any DMN messages
+     * @throws IllegalArgumentException if {@code model} was not loaded by this engine
      */
     public Evaluation evaluate(DMNModel model, String decisionName, Map<String, Object> inputs) {
+        requireLoaded(model);
         DMNContext context = contextOf(runtime, model, inputs);
         DMNResult result = runtime.evaluateByName(model, context, decisionName);
         Map<String, Object> decisions = decisionResults(result);
@@ -199,8 +215,10 @@ public final class RulesEngine {
      *               ignored (see {@link #unknownInputs})
      * @return the evaluation, in which {@link Evaluation#result()} and {@link Evaluation#decisions()} both hold the
      *         value of every decision by name
+     * @throws IllegalArgumentException if {@code model} was not loaded by this engine
      */
     public Evaluation evaluateAll(DMNModel model, Map<String, Object> inputs) {
+        requireLoaded(model);
         DMNContext context = contextOf(runtime, model, inputs);
         DMNResult result = runtime.evaluateAll(model, context);
         Map<String, Object> decisions = Collections.unmodifiableMap(decisionResults(result));
@@ -214,6 +232,74 @@ public final class RulesEngine {
         }
         boolean failed = result.hasErrors() || hasWarnings(result) || !noResult.isEmpty();
         return new Evaluation(model.getName(), decisions, decisions, messages, failed);
+    }
+
+    /**
+     * Evaluates one decision of a named model, for application code that wants an answer without going through the
+     * REST endpoint.
+     *
+     * <p>This works whether or not the web endpoint is enabled
+     * ({@code spring-boot-business-rules.web.enabled}). It applies the same rule as the endpoint: only the
+     * model's declared inputs may be supplied, because a value supplied under a decision's name would replace that
+     * decision's result. Unlike the endpoint it applies none of the request {@code limits}; bounding the size of data
+     * handed in from untrusted callers is up to the calling code. DMN problems such as a missing input do not throw;
+     * check {@link Evaluation#failed()}.
+     *
+     * @param modelName    the DMN model name (the {@code name} of the model in the {@code .dmn} file, not the file name)
+     * @param decisionName the decision to evaluate
+     * @param inputs       the input values, keyed by input name
+     * @return the evaluation
+     * @throws IllegalArgumentException if no model has that name, several do, the model has no such decision, or
+     *                                  {@code inputs} contains a key that is not a declared input of the model
+     */
+    public Evaluation evaluate(String modelName, String decisionName, Map<String, Object> inputs) {
+        requireNonNull(decisionName, "decisionName");
+        DMNModel model = uniqueModel(modelName, inputs);
+        if (model.getDecisionByName(decisionName) == null) {
+            throw new IllegalArgumentException("Model '" + modelName + "' has no decision '" + decisionName + "'");
+        }
+        return evaluate(model, decisionName, inputs);
+    }
+
+    /**
+     * Evaluates every decision of a named model. Like {@link #evaluate(String, String, Map)}, it works whether or not
+     * the web endpoint is enabled and rejects keys that are not declared inputs.
+     *
+     * @param modelName the DMN model name
+     * @param inputs    the input values, keyed by input name
+     * @return the evaluation, in which {@link Evaluation#result()} and {@link Evaluation#decisions()} hold every
+     *         decision's value by name
+     * @throws IllegalArgumentException if no model has that name, several do, or {@code inputs} contains a key that is
+     *                                  not a declared input of the model
+     */
+    public Evaluation evaluateAll(String modelName, Map<String, Object> inputs) {
+        return evaluateAll(uniqueModel(modelName, inputs), inputs);
+    }
+
+    /** Refuses a model that this engine did not load itself, so no rule from anywhere else can be run through it. */
+    private void requireLoaded(DMNModel model) {
+        if (models.stream().noneMatch(loaded -> loaded == model)) {
+            throw new IllegalArgumentException("That model was not loaded by this engine; only models found at startup"
+                    + " can be evaluated");
+        }
+    }
+
+    private DMNModel uniqueModel(String modelName, Map<String, Object> inputs) {
+        requireNonNull(modelName, "modelName");
+        requireNonNull(inputs, "inputs");
+        List<DMNModel> matches = findModels(modelName);
+        if (matches.isEmpty()) {
+            throw new IllegalArgumentException("No DMN model named '" + modelName + "' is loaded");
+        }
+        if (matches.size() > 1) {
+            throw new IllegalArgumentException("More than one DMN model is named '" + modelName + "'");
+        }
+        DMNModel model = matches.get(0);
+        List<String> unknown = unknownInputs(model, inputs);
+        if (!unknown.isEmpty()) {
+            throw new IllegalArgumentException("Unknown input(s): " + String.join(", ", unknown));
+        }
+        return model;
     }
 
     /**

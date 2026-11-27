@@ -85,7 +85,7 @@ public class RulesInstructionsController {
     private Map<String, Object> configuration() {
         String prefix = BusinessRulesProperties.PREFIX + ".";
         Map<String, Object> configuration = new LinkedHashMap<>();
-        configuration.put(prefix + "enabled", properties.enabled());
+        configuration.put(prefix + "web.enabled", properties.web().enabled());
         configuration.put(prefix + "path", properties.path());
         configuration.put(prefix + "rules-location", properties.rulesLocation());
         configuration.put(prefix + "instructions-enabled", properties.instructionsEnabled());
