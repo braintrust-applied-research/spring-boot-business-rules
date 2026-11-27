@@ -1,7 +1,7 @@
 ---
 id: task-1
 title: Programmatic rule evaluation independent of the REST gate
-status: In Progress
+status: Done
 assignee: []
 labels:
   - feature
