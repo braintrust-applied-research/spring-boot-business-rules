@@ -201,7 +201,9 @@ it). Check whether your Spring Boot version already manages a fixed version befo
 
 **If you are on Spring Boot 4.1.0 to 4.1.2**, upgrade to 4.1.3 or later. Those versions manage Spring Security 7.1.2 or
 older, which has CVE-2026-59333 (IP address matching ignores the address family, so a request from an IPv6 address can
-match an IPv4 rule; Snyk ID SNYK-JAVA-ORGSPRINGFRAMEWORKSECURITY-22729233), and Jackson versions with a critical
+match an IPv4 rule; Snyk ID SNYK-JAVA-ORGSPRINGFRAMEWORKSECURITY-22729233), Spring Framework 7.0.10 or older, which has
+CVE-2026-59394 (an open redirect in `UrlHandlerFilter` for paths that start with three or more slashes; Snyk ID
+SNYK-JAVA-ORGSPRINGFRAMEWORK-22727242; only reachable if your application registers that filter), and Jackson versions with a critical
 deserialization flaw (CVE-2026-110879; this library does not use Jackson's polymorphic typing, so it cannot be reached
 through it, but your application may use Jackson elsewhere). If you cannot upgrade yet, override the managed versions
 in a project that inherits `spring-boot-starter-parent`:
@@ -209,12 +211,13 @@ in a project that inherits `spring-boot-starter-parent`:
 ```xml
 <properties>
   <spring-security.version>7.1.3</spring-security.version>
+  <spring-framework.version>7.0.11</spring-framework.version>
   <jackson-2-bom.version>2.21.8</jackson-2-bom.version>
   <jackson-bom.version>3.1.8</jackson-bom.version>
 </properties>
 ```
 
-With Gradle and the Spring Boot plugin, set `ext['spring-security.version']`, `ext['jackson-2-bom.version']` and
+With Gradle and the Spring Boot plugin, set `ext['spring-security.version']`, `ext['spring-framework.version']`, `ext['jackson-2-bom.version']` and
 `ext['jackson-bom.version']` (the plugin's documented way to override managed versions; not tested here). If you import
 `spring-boot-dependencies` as a bill of materials (BOM) instead of inheriting the parent, these properties have no
 effect and you must manage the versions yourself.
