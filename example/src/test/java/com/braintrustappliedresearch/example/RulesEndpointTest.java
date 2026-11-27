@@ -44,7 +44,7 @@ class RulesEndpointTest {
     void getReportsEffectiveConfiguration() throws Exception {
         String body = get("/api/business/rules").body();
         assertThat(body).contains(
-                "\"spring-boot-business-rules.enabled\":true",
+                "\"spring-boot-business-rules.web.enabled\":true",
                 "\"spring-boot-business-rules.path\":\"/business/rules\"",
                 "\"spring-boot-business-rules.rules-location\":\"classpath*:rules/**/*.dmn\"",
                 "\"spring-boot-business-rules.instructions-enabled\":true");

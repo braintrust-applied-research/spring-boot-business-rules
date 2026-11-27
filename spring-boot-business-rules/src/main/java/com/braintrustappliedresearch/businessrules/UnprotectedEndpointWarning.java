@@ -28,6 +28,6 @@ final class UnprotectedEndpointWarning implements SmartInitializingSingleton {
         log.warn("The rules endpoint '{}' (relative to the server context path) is enabled and UNAUTHENTICATED: Spring "
                 + "Security is not on the classpath, so anyone who can reach this application can evaluate your rules "
                 + "and probe their thresholds. Add authentication (for example spring-boot-starter-security), or "
-                + "disable the endpoint with {}.enabled=false.", path, BusinessRulesProperties.PREFIX);
+                + "switch the endpoint off by removing {}.web.enabled=true.", path, BusinessRulesProperties.PREFIX);
     }
 }
