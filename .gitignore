@@ -28,6 +28,9 @@ node_modules/
 .idea/
 .vscode/
 
+### Graphify
+graphify-out/
+
 ### Secrets and credentials (never commit these; keep templates as *.example)
 .env
 .env.*
